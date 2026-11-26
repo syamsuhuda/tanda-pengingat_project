@@ -1,0 +1,90 @@
+name: Daily Attendance Reminder Cron
+
+on:
+  schedule:
+    # 09.00 WIB (UTC+7)
+    - cron: "0 2 * * *"
+    # 15.00 WIB (UTC+7)
+    - cron: "0 8 * * *"
+    # 20.30 WIB (UTC+7)
+    - cron: "30 13 * * *"
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "Tahap pengingat absen yang ingin dijalankan"
+        required: true
+        default: "morning"
+        type: choice
+        options:
+          - morning
+          - afternoon
+          - urgent
+
+concurrency:
+  group: attendance-cron-${{ github.event.schedule || github.event.inputs.stage || 'manual' }}
+  cancel-in-progress: false
+
+jobs:
+  trigger-attendance:
+    name: Trigger Attendance API
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Resolve attendance stage
+        id: stage
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SCHEDULE_EXPR: ${{ github.event.schedule }}
+          INPUT_STAGE: ${{ github.event.inputs.stage }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            STAGE="$INPUT_STAGE"
+          else
+            case "$SCHEDULE_EXPR" in
+              "0 2 * * *")
+                STAGE="morning"
+                ;;
+              "0 8 * * *")
+                STAGE="afternoon"
+                ;;
+              "30 13 * * *")
+                STAGE="urgent"
+                ;;
+              *)
+                echo "Unsupported cron expression: $SCHEDULE_EXPR" >&2
+                exit 1
+                ;;
+            esac
+          fi
+
+          echo "Resolved stage: $STAGE"
+          echo "value=$STAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Call attendance cron endpoint
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          STAGE: ${{ steps.stage.outputs.value }}
+        run: |
+          if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "Error: APP_URL dan CRON_SECRET wajib dikonfigurasi di GitHub Repository Secrets." >&2
+            exit 1
+          fi
+
+          TARGET_URL="${APP_URL%/}/api/cron/attendance"
+          echo "POST $TARGET_URL (stage=$STAGE)"
+
+          curl \
+            --fail-with-body \
+            --silent \
+            --show-error \
+            --max-time 25 \
+            --retry 2 \
+            --retry-delay 5 \
+            --retry-connrefused \
+            -X POST "$TARGET_URL" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "Content-Type: application/json" \
+            -d "{\"stage\":\"${STAGE}\"}"
+          echo ""

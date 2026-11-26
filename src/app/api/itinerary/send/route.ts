@@ -1,0 +1,103 @@
+import {
+  handleRouteError,
+  jsonError,
+  jsonOk,
+  parseJsonBody,
+  requireAuthenticatedSession,
+} from "@/lib/api-helpers";
+import { getEnv } from "@/lib/env";
+import { sendItineraryInvitation } from "@/lib/mailer";
+import { appendActivityLog, listFriendContacts } from "@/lib/store";
+import type { RecipientAddress } from "@/lib/types";
+import { sendItinerarySchema } from "@/lib/validators";
+
+export const dynamic = "force-dynamic";
+
+const MAX_RECIPIENTS = 30;
+
+export async function POST(request: Request) {
+  try {
+    const authFailure = await requireAuthenticatedSession();
+    if (authFailure) {
+      return authFailure;
+    }
+
+    const parsed = await parseJsonBody(request, sendItinerarySchema);
+    if (!parsed.success) {
+      return parsed.response;
+    }
+
+    const { mode, contactIds, manualEmails, subject, alarmMinutes, icsMode, sessions } =
+      parsed.data;
+    const env = getEnv();
+
+    let recipients: RecipientAddress[] = [];
+
+    if (mode === "date") {
+      // Pada mode Date Itinerary, server selalu mengunci penerima ke PARTNER_EMAIL.
+      recipients = [{ name: env.PARTNER_NAME, email: env.PARTNER_EMAIL }];
+    } else {
+      const allContacts = await listFriendContacts();
+      const contactById = new Map(allContacts.map((c) => [c.id, c]));
+      const deduped = new Map<string, RecipientAddress>();
+
+      for (const id of contactIds) {
+        const contact = contactById.get(id);
+        if (contact) {
+          deduped.set(contact.email.toLowerCase(), {
+            name: contact.name,
+            email: contact.email,
+          });
+        }
+      }
+
+      for (const email of manualEmails) {
+        const normalized = email.trim().toLowerCase();
+        if (!deduped.has(normalized)) {
+          deduped.set(normalized, { email: normalized });
+        }
+      }
+
+      recipients = Array.from(deduped.values());
+
+      if (recipients.length === 0) {
+        return jsonError(
+          "Pilih minimal satu kontak tersimpan atau masukkan alamat email penerima.",
+          "NO_RECIPIENTS",
+          400,
+        );
+      }
+
+      if (recipients.length > MAX_RECIPIENTS) {
+        return jsonError(
+          `Maksimal ${MAX_RECIPIENTS} penerima unik dalam satu pengiriman (saat ini: ${recipients.length}).`,
+          "MAX_RECIPIENTS_EXCEEDED",
+          400,
+        );
+      }
+    }
+
+    const result = await sendItineraryInvitation({
+      mode,
+      recipients,
+      subject,
+      sessions,
+      alarmMinutes,
+      icsMode,
+    });
+
+    const modeSummary = mode === "date" ? "Date Itinerary" : "Undangan Teman";
+    await appendActivityLog({
+      type: "itinerary_sent",
+      summary: `${modeSummary} "${subject}" (${result.sessionCount} sesi) terkirim ke ${result.recipientCount} penerima.`,
+      result: "success",
+    });
+
+    return jsonOk(
+      `Undangan "${subject}" berhasil dikirim ke ${result.recipientCount} penerima.`,
+      result,
+    );
+  } catch (error) {
+    return handleRouteError(error, "Gagal mengirim undangan itinerary.");
+  }
+}

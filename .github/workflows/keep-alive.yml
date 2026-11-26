@@ -1,0 +1,42 @@
+name: Keep GitHub Actions Active
+
+on:
+  schedule:
+    # Cek rutin setiap tanggal 1 dan 15 pukul 00.00 UTC agar workflow terjadwal tidak nonaktif setelah 60 hari tanpa commit.
+    - cron: "0 0 1,15 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  keep-alive:
+    name: Prevent 60-day schedule disable
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Create keep-alive commit when idle >= 45 days
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          LAST_COMMIT_TS=$(git log -1 --format=%ct)
+          NOW_TS=$(date +%s)
+          AGE_DAYS=$(( (NOW_TS - LAST_COMMIT_TS) / 86400 ))
+
+          echo "Last commit age: ${AGE_DAYS} days"
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] || [ "$AGE_DAYS" -ge 45 ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit --allow-empty -m "chore: keep github actions active"
+            git push
+            echo "Keep-alive commit pushed."
+          else
+            echo "Repository masih aktif (${AGE_DAYS} hari < 45 hari); commit dilewati."
+          fi

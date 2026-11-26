@@ -1,0 +1,33 @@
+{
+  "name": "pengingat-jadwal",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "secrets:generate": "node scripts/generate-secrets.mjs",
+    "verify:ics": "tsx scripts/verify-ics-timezone.ts"
+  },
+  "dependencies": {
+    "@upstash/redis": "^1.34.3",
+    "lucide-react": "^0.511.0",
+    "next": "^15.5.0",
+    "nodemailer": "^6.10.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.0",
+    "@types/node": "^22.15.0",
+    "@types/nodemailer": "^6.4.17",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "tailwindcss": "^4.1.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}
