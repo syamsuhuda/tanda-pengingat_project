@@ -569,25 +569,28 @@ export function BotSettingsCard({
             {savingSchedule ? "Menyimpan..." : "Simpan Jadwal"}
           </button>
         </form>
-      ) : (
-        <div className="mt-4 space-y-3.5">
-          <div>
-            <h3 className="text-xs font-bold text-[var(--ink)]">
-              Ubah PIN Akses (Verifikasi Bertahap)
-            </h3>
-            <p className="mt-0.5 text-[11px] leading-relaxed text-[var(--ink-muted)]">
-              Verifikasi kode OTP email pemilik terlebih dahulu sebelum mengganti PIN. Mengganti PIN akan mengeluarkan sesi perangkat lain.
-            </p>
-          </div>
+      ) : null}
 
-          <StepUpPinFlow
-            purpose="change_pin"
-            onSuccess={async () => {
-              await onConfigChanged();
-            }}
-          />
+      <div
+        hidden={subTab !== "security"}
+        className={subTab === "security" ? "mt-4 space-y-3.5" : "hidden"}
+      >
+        <div>
+          <h3 className="text-xs font-bold text-[var(--ink)]">
+            Ubah PIN Akses (Verifikasi Bertahap)
+          </h3>
+          <p className="mt-0.5 text-[11px] leading-relaxed text-[var(--ink-muted)]">
+            Verifikasi kode OTP email pemilik terlebih dahulu sebelum mengganti PIN. Mengganti PIN akan mengeluarkan sesi perangkat lain.
+          </p>
         </div>
-      )}
+
+        <StepUpPinFlow
+          purpose="change_pin"
+          onSuccess={async () => {
+            await onConfigChanged();
+          }}
+        />
+      </div>
     </section>
   );
 }

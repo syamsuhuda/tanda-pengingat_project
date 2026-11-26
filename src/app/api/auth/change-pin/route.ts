@@ -15,12 +15,13 @@ import {
 } from "@/lib/security";
 import {
   clearLoginRateLimit,
-  consumeVerificationTicket,
+  deleteVerificationTicket,
   getActiveSenderName,
   getLoginRateLimitState,
   recordFailedLoginAttempt,
   setActivePinConfig,
   verifyActivePin,
+  verifyVerificationTicket,
 } from "@/lib/store";
 import { getNowWibTimeLabel } from "@/lib/timezone";
 import { changePinSchema } from "@/lib/validators";
@@ -39,7 +40,7 @@ export async function POST(request: Request) {
       return withNoStore(parsed.response);
     }
 
-    const ticketValid = await consumeVerificationTicket(
+    const ticketValid = await verifyVerificationTicket(
       "change_pin",
       parsed.data.verificationToken,
     );
@@ -89,6 +90,17 @@ export async function POST(request: Request) {
       );
     }
 
+    // Konsumsi tiket sekali pakai secara atomik hanya setelah seluruh verifikasi (termasuk PIN saat ini) lulus.
+    const consumed = await deleteVerificationTicket("change_pin");
+    if (!consumed) {
+      return withNoStore(
+        jsonError(
+          "Sesi verifikasi OTP sudah digunakan atau habis. Silakan minta dan verifikasi kode OTP baru.",
+          "VERIFICATION_EXPIRED",
+          401,
+        ),
+      );
+    }
     await clearLoginRateLimit(ipHash);
 
     const { sessionVersion, updatedAt } = await setActivePinConfig(parsed.data.newPin, "pin_updated");
@@ -98,7 +110,7 @@ export async function POST(request: Request) {
       const senderName = await getActiveSenderName();
       await sendPinResetSuccessEmail({
         purpose: "change_pin",
-        resetAtWibLabel: `${getNowWibTimeLabel()} WIB`,
+        resetAtWibLabel: getNowWibTimeLabel(),
         senderName,
       });
     } catch {

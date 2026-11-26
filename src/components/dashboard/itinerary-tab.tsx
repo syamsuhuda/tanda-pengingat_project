@@ -1093,8 +1093,8 @@ export function ItineraryTab({
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-                    <div className="col-span-2 sm:col-span-1">
+                  <div className="grid grid-cols-1 gap-2.5 min-[420px]:grid-cols-2 sm:grid-cols-3">
+                    <div className="min-[420px]:col-span-2 sm:col-span-1">
                       <label
                         htmlFor={`session-date-${activeSession.draftId}`}
                         className="block text-xs font-semibold text-[var(--ink)]"

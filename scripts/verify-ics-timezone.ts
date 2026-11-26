@@ -4,6 +4,8 @@ import {
   buildAttendanceReminderEmail,
   buildEscalationEmail,
   buildItineraryEmail,
+  buildPinResetOtpEmail,
+  buildPinResetSuccessEmail,
 } from "../src/lib/email-templates";
 import {
   buildAttendanceCalendarSlot,
@@ -442,7 +444,31 @@ function runAllAssertions(): void {
   }
   assert.equal(formatHmTimeWibLabel("09:00"), "09:00 WIB");
 
-  console.log("SEMUA VERIFIKASI TIMEZONE, 24 JAM WIB, ICS DINAMIS, SANITASI HEADER/SENDER, EMAIL, BATCH UID, & KEAMANAN PIN LULUS (18/18 suite).");
+  // 19. Email keamanan OTP & ubah/reset PIN memakai format 24 jam tunggal tanpa duplikasi "WIB WIB"
+  const secTimeLabel = getNowWibTimeLabel(new Date("2026-11-27T06:45:00.000Z"));
+  assert.equal(secTimeLabel, "13:45 WIB");
+  for (const purpose of ["change_pin", "forgot_reset"] as const) {
+    const otpMail = buildPinResetOtpEmail({
+      purpose,
+      otp: "123456",
+      requestedAtWibLabel: secTimeLabel,
+      senderName: "Pengingat Jadwal",
+    });
+    const successMail = buildPinResetSuccessEmail({
+      purpose,
+      resetAtWibLabel: secTimeLabel,
+      senderName: "Pengingat Jadwal",
+    });
+    for (const mail of [otpMail, successMail]) {
+      assert.ok(mail.html.includes("13:45 WIB"));
+      assert.ok(mail.text.includes("13:45 WIB"));
+      assert.equal(mail.html.includes("WIB WIB"), false, "Tidak boleh ada duplikasi WIB WIB di HTML");
+      assert.equal(mail.text.includes("WIB WIB"), false, "Tidak boleh ada duplikasi WIB WIB di teks");
+      assert.equal(/\b(am|pm)\b/i.test(`${mail.subject} ${mail.text}`), false);
+    }
+  }
+
+  console.log("SEMUA VERIFIKASI TIMEZONE, 24 JAM WIB, ICS DINAMIS, SANITASI HEADER/SENDER, EMAIL, BATCH UID, & KEAMANAN PIN LULUS (19/19 suite).");
 }
 
 runAllAssertions();

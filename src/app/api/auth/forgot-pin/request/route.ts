@@ -63,7 +63,7 @@ export async function POST(request: Request) {
       await sendPinResetOtpEmail({
         purpose: "forgot_reset",
         otp,
-        requestedAtWibLabel: `${getNowWibTimeLabel()} WIB`,
+        requestedAtWibLabel: getNowWibTimeLabel(),
         senderName,
       });
     } catch (mailError) {

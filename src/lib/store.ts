@@ -1123,8 +1123,9 @@ export async function issueVerificationTicket(purpose: OtpPurpose): Promise<{
   const verificationToken = generateVerificationToken();
   const salt = crypto.randomBytes(16).toString("hex");
   const ticketHash = hashPurposeToken(purpose, verificationToken, salt);
-  const verifiedAt = getNowWibIso();
-  const expiresAt = new Date(Date.now() + AUTH_TICKET_TTL_SECONDS * 1000).toISOString();
+  const nowMs = Date.now();
+  const verifiedAt = getNowWibIso(new Date(nowMs));
+  const expiresAt = getNowWibIso(new Date(nowMs + AUTH_TICKET_TTL_SECONDS * 1000));
 
   const record: VerificationTicketRecord = {
     ticketHash,
@@ -1148,7 +1149,7 @@ export async function issueVerificationTicket(purpose: OtpPurpose): Promise<{
   };
 }
 
-export async function consumeVerificationTicket(
+export async function verifyVerificationTicket(
   purpose: OtpPurpose,
   token: string,
 ): Promise<boolean> {
@@ -1163,12 +1164,24 @@ export async function consumeVerificationTicket(
     return false;
   }
 
-  const valid = verifyPurposeToken(purpose, token, parsed.salt, parsed.ticketHash);
+  return verifyPurposeToken(purpose, token, parsed.salt, parsed.ticketHash);
+}
+
+export async function deleteVerificationTicket(purpose: OtpPurpose): Promise<boolean> {
+  const redis = getRedis();
+  const deleted = await redis.del(REDIS_KEYS.authPurposeTicket(purpose));
+  return Number(deleted) > 0;
+}
+
+export async function consumeVerificationTicket(
+  purpose: OtpPurpose,
+  token: string,
+): Promise<boolean> {
+  const valid = await verifyVerificationTicket(purpose, token);
   if (!valid) {
     return false;
   }
 
-  // Tiket bersifat single-use: langsung dihapus begitu lolos verifikasi.
-  await redis.del(ticketKey);
-  return true;
+  // Tiket bersifat single-use: hapus secara atomik dan pastikan tepat satu pemanggil yang mengonsumsinya.
+  return deleteVerificationTicket(purpose);
 }

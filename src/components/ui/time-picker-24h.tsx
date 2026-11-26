@@ -47,9 +47,8 @@ export function TimePicker24h({
 
   return (
     <div
-      className={`inline-flex min-h-[44px] w-full min-w-0 items-center justify-between gap-1 rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-2.5 text-[var(--ink)] transition-colors focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--focus-ring)] ${
-        disabled ? "opacity-55" : ""
-      } ${className}`}
+      className={`inline-flex min-h-[44px] w-full min-w-0 items-center justify-between gap-1 rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-2 text-[var(--ink)] transition-colors focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--focus-ring)] ${disabled ? "opacity-55" : ""
+        } ${className}`}
     >
       <div className="flex min-w-0 flex-1 items-center gap-1">
         <select
