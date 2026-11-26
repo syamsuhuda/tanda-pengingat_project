@@ -5,6 +5,32 @@ import { getEnv } from "./env";
 export const SESSION_COOKIE_NAME = "pj_session";
 export const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 hari
 
+// Hapus CR/LF, karakter kontrol ASCII, dan tanda kutip ganda untuk mencegah SMTP Header Injection & rusaknya param ICS.
+export function sanitizeSenderDisplayName(
+  raw: string | undefined | null,
+  fallback = "Pengingat Jadwal",
+): string {
+  const cleaned = (raw ?? "")
+    .replace(/[\r\n\0\x00-\x1F\x7F]+/g, " ")
+    .replace(/"/g, "'")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 60);
+
+  if (cleaned.length > 0) {
+    return cleaned;
+  }
+
+  const safeFallback = fallback
+    .replace(/[\r\n\0\x00-\x1F\x7F]+/g, " ")
+    .replace(/"/g, "'")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 60);
+
+  return safeFallback || "Pengingat Jadwal";
+}
+
 // Hash kedua input sebelum timingSafeEqual agar panjang string yang berbeda tidak menimbulkan RangeError maupun bocoran panjang.
 export function timingSafeStringEqual(a: string, b: string): boolean {
   const digestA = crypto.createHash("sha256").update(a, "utf8").digest();

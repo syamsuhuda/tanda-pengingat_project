@@ -1,5 +1,10 @@
 import { buildGoogleCalendarTemplateUrl } from "./ics";
 import {
+  DEFAULT_CATEGORY_BY_MODE,
+  generateItineraryIntroMessage,
+  normalizeItineraryMode,
+} from "./itinerary-copy";
+import {
   formatDurationIndonesian,
   formatWibDateIndonesian,
   formatWibDateShortIndonesian,
@@ -7,6 +12,7 @@ import {
 import type {
   AttendanceStage,
   IcsBundleMode,
+  ItineraryMessageTone,
   ItineraryRecipientMode,
   ResolvedItinerarySession,
 } from "./types";
@@ -370,20 +376,33 @@ export function buildItineraryEmail(params: {
   mode: ItineraryRecipientMode;
   subject: string;
   senderName: string;
+  recipientName?: string;
+  categoryLabel?: string;
+  messageTone?: ItineraryMessageTone;
+  customIntroMessage?: string;
   sessions: ResolvedItinerarySession[];
   icsMode: IcsBundleMode;
   alarmMinutes: number;
 }): EmailContent {
-  const isDate = params.mode === "date";
-  const badgeText = isDate ? "Date Ticket & Itinerary" : "Hangout & Event Plan";
+  const normalizedMode = normalizeItineraryMode(params.mode);
+  const isDate = normalizedMode === "date";
+  const badgeText =
+    params.categoryLabel?.trim() || DEFAULT_CATEGORY_BY_MODE[normalizedMode];
   const countLabel =
     params.sessions.length === 1
-      ? "1 sesi seru"
+      ? "1 sesi terjadwal"
       : `${params.sessions.length} sesi dalam rangkaian acara`;
 
-  const introText = isDate
-    ? `Ada rencana date seru yang sudah disiapkan oleh ${params.senderName} (${countLabel}). Yuk cek detail tiap sesinya di bawah dan simpan ke kalender biar tidak lupa!`
-    : `Hai semuanya! ${params.senderName} baru saja membagikan jadwal hangout (${countLabel}). Cek detail waktu & lokasinya di bawah, lalu simpan ke Google Calendar kamu.`;
+  const introText =
+    params.customIntroMessage?.trim() ||
+    generateItineraryIntroMessage({
+      mode: normalizedMode,
+      tone: params.messageTone && params.messageTone !== "custom" ? params.messageTone : "natural",
+      senderName: params.senderName,
+      recipientName: params.recipientName,
+      categoryLabel: badgeText,
+      sessionCount: params.sessions.length,
+    });
 
   const attachmentNote =
     params.sessions.length > 1 && params.icsMode === "separate"
@@ -459,7 +478,7 @@ export function buildItineraryEmail(params: {
     .join("");
 
   const bodyHtml = `
-    <p style="margin:0 0 10px 0;">${escapeHtml(introText)}</p>
+    <p style="margin:0 0 12px 0;">${formatMultilineHtml(introText)}</p>
     <p style="margin:0 0 18px 0;font-size:13px;color:#5B5772;">${escapeHtml(attachmentNote)}</p>
     ${sessionsHtml}
   `;
@@ -503,8 +522,11 @@ export function buildItineraryEmail(params: {
   });
 
   const text = [
-    `${badgeText}: ${params.subject}`,
+    `[${badgeText}] ${params.subject}`,
+    `Dari: ${params.senderName}`,
+    "",
     introText,
+    "",
     attachmentNote,
     "",
     ...textSessions.flatMap((block) => [block, ""]),

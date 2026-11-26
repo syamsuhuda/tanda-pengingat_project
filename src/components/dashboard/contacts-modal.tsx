@@ -183,10 +183,10 @@ export function ContactsModal({
               id="contacts-modal-title"
               className="font-display text-xl font-semibold text-[var(--ink)]"
             >
-              Kelola Kontak Teman
+              Kelola Kontak Undangan
             </h2>
             <p className="text-xs text-[var(--ink-muted)]">
-              Kontak disimpan permanen di Upstash Redis dan dapat difilter per grup.
+              Simpan kontak teman, keluarga, rekan kerja, atau komunitas per grup.
             </p>
           </div>
           <button
@@ -278,7 +278,9 @@ export function ContactsModal({
                   className="mt-1 min-h-[44px] w-full rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
                 />
                 <datalist id="contact-group-suggestions">
-                  {Array.from(new Set(["Umum", "Teman Dekat", "Kantor", "Kuliah", ...groups])).map(
+                  {Array.from(
+                    new Set(["Umum", "Teman", "Keluarga", "Rekan Kerja", "Komunitas", ...groups]),
+                  ).map(
                     (g) => (
                       <option key={g} value={g} />
                     ),

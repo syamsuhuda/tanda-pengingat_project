@@ -20,6 +20,11 @@ export interface ActiveRecipientConfig {
   updatedAt: string;
 }
 
+export interface ActiveSenderConfig {
+  name: string;
+  updatedAt: string;
+}
+
 export type CustomMessageScope = "today_only" | "always";
 
 export interface CustomMessageConfig {
@@ -70,6 +75,7 @@ export type ActivityLogType =
   | "attendance_reset"
   | "bot_pause"
   | "recipient_updated"
+  | "sender_updated"
   | "message_updated"
   | "off_days_updated"
   | "schedule_updated"
@@ -107,6 +113,7 @@ export interface DashboardStatusData {
   nowWibTime: string;
   partnerName: string;
   partnerEmail: string;
+  senderName: string;
   recipient: ActiveRecipientConfig;
   customMessage: CustomMessageConfig | null;
   todayOffDay: TodayOffDayStatus;
@@ -127,7 +134,11 @@ export interface DashboardUnchangedData {
 
 export type DashboardStatusResponseData = DashboardStatusData | DashboardUnchangedData;
 
-export type ItineraryRecipientMode = "date" | "friends";
+export type ItineraryRecipientMode = "date" | "event" | "friends";
+
+export type NormalizedItineraryMode = "date" | "event";
+
+export type ItineraryMessageTone = "formal" | "natural" | "casual" | "custom";
 
 export type IcsBundleMode = "combined" | "separate";
 

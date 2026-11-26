@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { sanitizeSenderDisplayName } from "./security";
 import {
   addMinutesToHmTime,
   formatUtcDateForIcs,
@@ -157,7 +158,7 @@ export function generateIcsCalendar(events: IcsEventInput[]): string {
   for (const event of events) {
     const range = resolveWibSessionUtcRange(event.date, event.startTime, event.endTime);
     const dtStampUtc = formatUtcDateForIcs(event.dtStamp ?? new Date());
-    const organizerName = escapeIcsParamValue(event.organizer.name);
+    const organizerName = escapeIcsParamValue(sanitizeSenderDisplayName(event.organizer.name));
     const safeAlarmMinutes = Math.max(1, Math.round(event.alarmMinutes));
 
     const descriptionParts: string[] = [];

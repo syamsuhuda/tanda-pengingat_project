@@ -8,6 +8,7 @@ import {
   getActiveCustomMessage,
   getActiveRecipient,
   getActiveSchedule,
+  getActiveSenderName,
   getAllStageSentAt,
   getAttendanceStatus,
   getBotPauseConfig,
@@ -197,9 +198,10 @@ export async function POST(request: Request) {
       targetStage = requestedStage;
     }
 
-    const [recipient, activeCustomMessage] = await Promise.all([
+    const [recipient, activeCustomMessage, senderName] = await Promise.all([
       getActiveRecipient(),
       getActiveCustomMessage(todayWib),
+      getActiveSenderName(),
     ]);
 
     const requestOrigin = new URL(request.url).origin;
@@ -213,6 +215,7 @@ export async function POST(request: Request) {
       const dispatch = await sendUrgentWithEscalation({
         dateWib: todayWib,
         recipient,
+        senderName,
         confirmUrl,
         dashboardUrl: baseUrl,
         customMessage: customMessageText,
@@ -268,6 +271,7 @@ export async function POST(request: Request) {
       stage: targetStage,
       dateWib: todayWib,
       recipient,
+      senderName,
       confirmUrl,
       includeIcs,
       customMessage: customMessageText,

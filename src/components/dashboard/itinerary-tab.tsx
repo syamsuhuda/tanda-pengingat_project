@@ -5,20 +5,27 @@ import {
   AlertCircle,
   ArrowDown,
   ArrowUp,
+  CalendarDays,
   Check,
   ChevronDown,
   Heart,
   Lock,
   Plus,
+  RotateCcw,
   Send,
   Ticket,
   Trash2,
   UserPlus,
-  Users,
   X,
 } from "lucide-react";
 import { ContactsModal } from "@/components/dashboard/contacts-modal";
 import { ItineraryPreview } from "@/components/dashboard/itinerary-preview";
+import {
+  DATE_CATEGORY_PRESETS,
+  DEFAULT_CATEGORY_BY_MODE,
+  EVENT_CATEGORY_PRESETS,
+  generateItineraryIntroMessage,
+} from "@/lib/itinerary-copy";
 import {
   formatDurationIndonesian,
   isValidHmTime,
@@ -30,12 +37,14 @@ import type {
   AlarmMinutes,
   FriendContact,
   IcsBundleMode,
+  ItineraryMessageTone,
   ItineraryRecipientMode,
   ItinerarySessionInput,
 } from "@/lib/types";
 
 interface ItineraryTabProps {
   todayWib: string;
+  defaultSenderName: string;
   partnerName: string;
   partnerEmail: string;
   contacts: FriendContact[];
@@ -100,6 +109,7 @@ function computeGapLabel(
 
 export function ItineraryTab({
   todayWib,
+  defaultSenderName,
   partnerName,
   partnerEmail,
   contacts,
@@ -108,6 +118,13 @@ export function ItineraryTab({
   onSentSuccess,
 }: ItineraryTabProps) {
   const [mode, setMode] = useState<ItineraryRecipientMode>("date");
+  const [senderName, setSenderName] = useState(defaultSenderName);
+  const [senderDirty, setSenderDirty] = useState(false);
+  const [categoryLabel, setCategoryLabel] = useState<string>(DEFAULT_CATEGORY_BY_MODE.date);
+  const [categoryIsCustom, setCategoryIsCustom] = useState(false);
+  const [messageTone, setMessageTone] = useState<ItineraryMessageTone>("natural");
+  const [introEditedManually, setIntroEditedManually] = useState(false);
+
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
   const [activeGroupFilter, setActiveGroupFilter] = useState<string>("ALL");
   const [manualEmailInput, setManualEmailInput] = useState("");
@@ -123,12 +140,51 @@ export function ItineraryTab({
     createInitialSession(todayWib),
   ]);
   const [expandedExtras, setExpandedExtras] = useState<Record<string, boolean>>({});
+  const [introMessage, setIntroMessage] = useState<string>(() =>
+    generateItineraryIntroMessage({
+      mode: "date",
+      tone: "natural",
+      senderName: defaultSenderName,
+      recipientName: partnerName,
+      categoryLabel: DEFAULT_CATEGORY_BY_MODE.date,
+      sessionCount: 1,
+    }),
+  );
 
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
+
+  useEffect(() => {
+    if (!senderDirty) {
+      setSenderName(defaultSenderName);
+    }
+  }, [defaultSenderName, senderDirty]);
+
+  useEffect(() => {
+    if (introEditedManually || messageTone === "custom") return;
+    setIntroMessage(
+      generateItineraryIntroMessage({
+        mode,
+        tone: messageTone,
+        senderName: senderName.trim() || defaultSenderName,
+        recipientName: mode === "date" ? partnerName : undefined,
+        categoryLabel,
+        sessionCount: sessions.length,
+      }),
+    );
+  }, [
+    mode,
+    messageTone,
+    senderName,
+    defaultSenderName,
+    partnerName,
+    categoryLabel,
+    sessions.length,
+    introEditedManually,
+  ]);
 
   useEffect(() => {
     if (!mobilePreviewOpen) return;
@@ -161,7 +217,52 @@ export function ItineraryTab({
   }, [contacts, selectedContactIds, manualEmails]);
 
   const effectiveRecipientCount = mode === "date" ? 1 : uniqueFriendsCount;
-  const exceedsRecipientLimit = mode === "friends" && uniqueFriendsCount > MAX_RECIPIENTS;
+  const exceedsRecipientLimit = mode !== "date" && uniqueFriendsCount > MAX_RECIPIENTS;
+  const activeCategoryPresets =
+    mode === "date" ? DATE_CATEGORY_PRESETS : EVENT_CATEGORY_PRESETS;
+
+  function handleModeChange(nextMode: ItineraryRecipientMode) {
+    setMode(nextMode);
+    if (!categoryIsCustom) {
+      setCategoryLabel(DEFAULT_CATEGORY_BY_MODE[nextMode === "date" ? "date" : "event"]);
+    }
+  }
+
+  function handleSelectTone(tone: ItineraryMessageTone) {
+    setMessageTone(tone);
+    if (tone === "custom") {
+      setIntroEditedManually(true);
+      return;
+    }
+    setIntroEditedManually(false);
+    setIntroMessage(
+      generateItineraryIntroMessage({
+        mode,
+        tone,
+        senderName: senderName.trim() || defaultSenderName,
+        recipientName: mode === "date" ? partnerName : undefined,
+        categoryLabel,
+        sessionCount: sessions.length,
+      }),
+    );
+  }
+
+  function handleResetIntroToPreset() {
+    const targetTone: ItineraryMessageTone =
+      messageTone === "custom" ? "natural" : messageTone;
+    setMessageTone(targetTone);
+    setIntroEditedManually(false);
+    setIntroMessage(
+      generateItineraryIntroMessage({
+        mode,
+        tone: targetTone,
+        senderName: senderName.trim() || defaultSenderName,
+        recipientName: mode === "date" ? partnerName : undefined,
+        categoryLabel,
+        sessionCount: sessions.length,
+      }),
+    );
+  }
 
   function toggleContact(id: string) {
     setSelectedContactIds((prev) =>
@@ -261,7 +362,7 @@ export function ItineraryTab({
 
     const pendingEmail = manualEmailInput.trim();
     let finalManualEmails = [...manualEmails];
-    if (mode === "friends" && pendingEmail) {
+    if (mode !== "date" && pendingEmail) {
       if (!EMAIL_REGEX.test(pendingEmail)) {
         setManualEmailError(`Format email tidak valid: ${pendingEmail}`);
         return;
@@ -281,10 +382,10 @@ export function ItineraryTab({
       return;
     }
 
-    if (mode === "friends" && effectiveRecipientCount === 0 && finalManualEmails.length === 0) {
+    if (mode !== "date" && effectiveRecipientCount === 0 && finalManualEmails.length === 0) {
       setFeedback({
         type: "error",
-        text: "Pilih minimal satu teman atau ketik alamat email penerima.",
+        text: "Pilih minimal satu kontak atau ketik alamat email penerima.",
       });
       return;
     }
@@ -315,14 +416,22 @@ export function ItineraryTab({
 
     setSubmitting(true);
 
+    const resolvedSenderName = senderName.trim() || defaultSenderName;
+    const resolvedCategoryLabel =
+      categoryLabel.trim() || DEFAULT_CATEGORY_BY_MODE[mode === "date" ? "date" : "event"];
+
     try {
       const response = await fetch("/api/itinerary/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           mode,
-          contactIds: mode === "friends" ? selectedContactIds : [],
-          manualEmails: mode === "friends" ? finalManualEmails : [],
+          senderName: resolvedSenderName,
+          categoryLabel: resolvedCategoryLabel,
+          messageTone,
+          customIntroMessage: introMessage.trim() || undefined,
+          contactIds: mode !== "date" ? selectedContactIds : [],
+          manualEmails: mode !== "date" ? finalManualEmails : [],
           subject: cleanSubject,
           alarmMinutes,
           icsMode: sessions.length > 1 ? icsMode : "combined",
@@ -378,7 +487,7 @@ export function ItineraryTab({
             Rancang Undangan &amp; Itinerary
           </h1>
           <p className="mt-0.5 text-sm text-[var(--ink-muted)]">
-            Susun rencana date atau hangout seru, lalu kirim langsung ke Google Calendar.
+            Susun rencana date atau beragam acara &amp; kegiatan, lalu kirim langsung ke Google Calendar.
           </p>
         </div>
 
@@ -419,7 +528,7 @@ export function ItineraryTab({
                 type="button"
                 role="radio"
                 aria-checked={mode === "date"}
-                onClick={() => setMode("date")}
+                onClick={() => handleModeChange("date")}
                 className={`inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-3.5 text-sm font-semibold transition-colors ${
                   mode === "date"
                     ? "bg-[var(--surface)] text-[var(--ink)] shadow-xs ring-1 ring-[var(--border-subtle)]"
@@ -437,20 +546,20 @@ export function ItineraryTab({
               <button
                 type="button"
                 role="radio"
-                aria-checked={mode === "friends"}
-                onClick={() => setMode("friends")}
+                aria-checked={mode !== "date"}
+                onClick={() => handleModeChange("event")}
                 className={`inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-3.5 text-sm font-semibold transition-colors ${
-                  mode === "friends"
+                  mode !== "date"
                     ? "bg-[var(--surface)] text-[var(--ink)] shadow-xs ring-1 ring-[var(--border-subtle)]"
                     : "text-[var(--ink-muted)] hover:text-[var(--ink)]"
                 }`}
               >
-                <Users
-                  className={`h-4 w-4 ${mode === "friends" ? "text-[var(--accent)]" : ""}`}
+                <CalendarDays
+                  className={`h-4 w-4 ${mode !== "date" ? "text-[var(--accent)]" : ""}`}
                   strokeWidth={2}
                   aria-hidden="true"
                 />
-                <span>Hangout Teman</span>
+                <span>Acara &amp; Kegiatan</span>
               </button>
             </div>
 
@@ -646,13 +755,184 @@ export function ItineraryTab({
           </section>
 
           <section
+            aria-labelledby="email-style-heading"
+            className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-xs sm:p-6"
+          >
+            <div className="flex items-center gap-2">
+              <span className="font-mono-num inline-flex h-6 w-6 items-center justify-center rounded-md bg-[var(--accent-tint)] text-xs font-bold text-[var(--accent)]">
+                2
+              </span>
+              <h2
+                id="email-style-heading"
+                className="font-display text-lg font-semibold text-[var(--ink)] sm:text-xl"
+              >
+                Tampilan &amp; Pesan Email
+              </h2>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              <div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label
+                    htmlFor="itinerary-sender-name"
+                    className="block text-xs font-semibold text-[var(--ink)]"
+                  >
+                    Nama Pengirim Email
+                  </label>
+                  {senderName.trim() !== defaultSenderName ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSenderName(defaultSenderName);
+                        setSenderDirty(false);
+                      }}
+                      className="text-xs font-semibold text-[var(--accent)] hover:underline"
+                    >
+                      Pakai default ({defaultSenderName})
+                    </button>
+                  ) : null}
+                </div>
+                <input
+                  id="itinerary-sender-name"
+                  type="text"
+                  maxLength={60}
+                  value={senderName}
+                  onChange={(event) => {
+                    setSenderName(event.target.value);
+                    setSenderDirty(true);
+                  }}
+                  placeholder={defaultSenderName}
+                  className="mt-1.5 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
+                />
+              </div>
+
+              <div>
+                <span className="block text-xs font-semibold text-[var(--ink)]">
+                  Kategori Kegiatan (Badge Email)
+                </span>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {activeCategoryPresets.map((preset) => {
+                    const active = !categoryIsCustom && categoryLabel === preset;
+                    return (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => {
+                          setCategoryLabel(preset);
+                          setCategoryIsCustom(false);
+                        }}
+                        className={`min-h-[38px] rounded-xl border px-3 text-xs font-semibold transition-colors ${
+                          active
+                            ? "border-[var(--accent)] bg-[var(--accent-tint)] text-[var(--accent)]"
+                            : "border-[var(--border-subtle)] bg-[var(--surface-elevated)] text-[var(--ink-muted)] hover:text-[var(--ink)]"
+                        }`}
+                      >
+                        {preset}
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => setCategoryIsCustom(true)}
+                    className={`min-h-[38px] rounded-xl border px-3 text-xs font-semibold transition-colors ${
+                      categoryIsCustom
+                        ? "border-[var(--accent)] bg-[var(--accent-tint)] text-[var(--accent)]"
+                        : "border-[var(--border-subtle)] bg-[var(--surface-elevated)] text-[var(--ink-muted)] hover:text-[var(--ink)]"
+                    }`}
+                  >
+                    Tulis Sendiri
+                  </button>
+                </div>
+
+                {categoryIsCustom ? (
+                  <input
+                    id="itinerary-custom-category"
+                    type="text"
+                    maxLength={40}
+                    value={categoryLabel}
+                    onChange={(event) => setCategoryLabel(event.target.value)}
+                    placeholder="Contoh: Syukuran Rumah, Rapat Tim, Roadtrip..."
+                    className="mt-2 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
+                  />
+                ) : null}
+              </div>
+
+              <div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="block text-xs font-semibold text-[var(--ink)]">
+                    Gaya Bahasa &amp; Pesan Pembuka
+                  </span>
+                  {introEditedManually ? (
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-md bg-[var(--surface-elevated)] px-2 py-0.5 text-[11px] font-semibold text-[var(--ink-muted)]">
+                        Diedit manual
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleResetIntroToPreset}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--accent)] hover:underline"
+                      >
+                        <RotateCcw className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
+                        <span>Reset ke preset</span>
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {(
+                    [
+                      { value: "formal", label: "Formal" },
+                      { value: "natural", label: "Natural" },
+                      { value: "casual", label: "Santai" },
+                      { value: "custom", label: "Tulis Sendiri" },
+                    ] as const
+                  ).map((item) => {
+                    const active = messageTone === item.value;
+                    return (
+                      <button
+                        key={item.value}
+                        type="button"
+                        onClick={() => handleSelectTone(item.value)}
+                        className={`min-h-[38px] rounded-xl border px-3 text-xs font-semibold transition-colors ${
+                          active
+                            ? "border-[var(--accent)] bg-[var(--accent-tint)] text-[var(--accent)]"
+                            : "border-[var(--border-subtle)] bg-[var(--surface-elevated)] text-[var(--ink-muted)] hover:text-[var(--ink)]"
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <textarea
+                  id="itinerary-intro-message"
+                  rows={3}
+                  maxLength={600}
+                  value={introMessage}
+                  onChange={(event) => {
+                    setIntroMessage(event.target.value);
+                    setIntroEditedManually(true);
+                  }}
+                  placeholder="Tulis pesan pembuka undangan di sini..."
+                  className="mt-2 w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 py-2.5 text-sm leading-relaxed text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
+                />
+                <p className="mt-1 text-right font-mono-num text-[11px] text-[var(--ink-muted)]">
+                  {introMessage.length} / 600
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section
             aria-labelledby="sessions-builder-heading"
             className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-xs sm:p-6"
           >
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <span className="font-mono-num inline-flex h-6 w-6 items-center justify-center rounded-md bg-[var(--accent-tint)] text-xs font-bold text-[var(--accent)]">
-                  2
+                  3
                 </span>
                 <h2
                   id="sessions-builder-heading"
@@ -1073,6 +1353,9 @@ export function ItineraryTab({
         <div className="hidden lg:col-span-5 lg:block">
           <ItineraryPreview
             mode={mode}
+            senderName={senderName}
+            categoryLabel={categoryLabel}
+            introMessage={introMessage}
             recipientCount={effectiveRecipientCount}
             partnerName={partnerName}
             subject={subject || sessions[0]?.title || ""}
@@ -1114,6 +1397,9 @@ export function ItineraryTab({
             </div>
             <ItineraryPreview
               mode={mode}
+              senderName={senderName}
+              categoryLabel={categoryLabel}
+              introMessage={introMessage}
               recipientCount={effectiveRecipientCount}
               partnerName={partnerName}
               subject={subject || sessions[0]?.title || ""}

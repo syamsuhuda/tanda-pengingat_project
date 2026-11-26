@@ -11,11 +11,13 @@ import {
   generateIcsCalendar,
   slugifyIcsFilename,
 } from "./ics";
+import { sanitizeSenderDisplayName } from "./security";
 import { getManualAttendanceSlot, resolveWibSessionUtcRange } from "./timezone";
 import type {
   AlarmMinutes,
   AttendanceStage,
   IcsBundleMode,
+  ItineraryMessageTone,
   ItineraryRecipientMode,
   ItinerarySessionInput,
   RecipientAddress,
@@ -43,11 +45,15 @@ function formatAddress(recipient: RecipientAddress): string {
   if (!recipient.name?.trim()) {
     return recipient.email;
   }
-  const safeName = recipient.name.replace(/["\r\n]+/g, "").trim();
+  const safeName = sanitizeSenderDisplayName(recipient.name, "");
+  if (!safeName) {
+    return recipient.email;
+  }
   return `"${safeName}" <${recipient.email}>`;
 }
 
 interface LayeredEmailParams {
+  fromName: string;
   to: RecipientAddress[];
   subject: string;
   text: string;
@@ -59,9 +65,10 @@ interface LayeredEmailParams {
 async function sendLayeredEmail(params: LayeredEmailParams): Promise<{ messageId: string }> {
   const env = getEnv();
   const transporter = createGmailTransporter();
+  const safeFromName = sanitizeSenderDisplayName(params.fromName, env.SENDER_NAME);
 
   const mailOptions: Mail.Options = {
-    from: formatAddress({ name: env.SENDER_NAME, email: env.GMAIL_USER }),
+    from: `"${safeFromName}" <${env.GMAIL_USER}>`,
     to: params.to.map(formatAddress),
     subject: params.subject,
     text: params.text,
@@ -94,6 +101,7 @@ export async function sendAttendanceReminder(params: {
   stage: AttendanceStage | "manual";
   dateWib: string;
   recipient: { name: string; email: string };
+  senderName?: string;
   confirmUrl: string;
   includeIcs: boolean;
   customMessage?: string | null;
@@ -101,6 +109,7 @@ export async function sendAttendanceReminder(params: {
   scheduledTimeWib?: string;
 }): Promise<{ messageId: string }> {
   const env = getEnv();
+  const safeSenderName = sanitizeSenderDisplayName(params.senderName, env.SENDER_NAME);
   const recipientAddress: RecipientAddress = {
     name: params.recipient.name,
     email: params.recipient.email,
@@ -111,12 +120,12 @@ export async function sendAttendanceReminder(params: {
   let icsAttachments: Array<{ filename: string; content: string }> | undefined;
   let calendarSlot:
     | {
-      startTime: string;
-      endTime: string;
-      dtStartUtc: string;
-      dtEndUtc: string;
-      summary: string;
-    }
+        startTime: string;
+        endTime: string;
+        dtStartUtc: string;
+        dtEndUtc: string;
+        summary: string;
+      }
     | undefined;
 
   if (params.includeIcs) {
@@ -160,7 +169,7 @@ export async function sendAttendanceReminder(params: {
         ]
           .filter(Boolean)
           .join("\n"),
-        organizer: { name: env.SENDER_NAME, email: env.GMAIL_USER },
+        organizer: { name: safeSenderName, email: env.GMAIL_USER },
         attendees: [recipientAddress],
         alarmMinutes: 15,
       },
@@ -174,7 +183,7 @@ export async function sendAttendanceReminder(params: {
     stage: params.stage,
     dateWib: params.dateWib,
     recipientName: params.recipient.name,
-    senderName: env.SENDER_NAME,
+    senderName: safeSenderName,
     confirmUrl: params.confirmUrl,
     customMessage: cleanMessage,
     scheduledTimeWib: params.scheduledTimeWib,
@@ -182,6 +191,7 @@ export async function sendAttendanceReminder(params: {
   });
 
   return sendLayeredEmail({
+    fromName: safeSenderName,
     to: [recipientAddress],
     subject: email.subject,
     text: email.text,
@@ -199,18 +209,20 @@ export interface UrgentDispatchResult {
 export async function sendUrgentWithEscalation(params: {
   dateWib: string;
   recipient: { name: string; email: string };
+  senderName?: string;
   confirmUrl: string;
   dashboardUrl: string;
   customMessage?: string | null;
   scheduledTimeWib?: string;
 }): Promise<UrgentDispatchResult> {
   const env = getEnv();
+  const safeSenderName = sanitizeSenderDisplayName(params.senderName, env.SENDER_NAME);
 
   const escalationEmail = buildEscalationEmail({
     dateWib: params.dateWib,
     recipientName: params.recipient.name,
     recipientEmail: params.recipient.email,
-    senderName: env.SENDER_NAME,
+    senderName: safeSenderName,
     dashboardUrl: params.dashboardUrl,
     confirmUrl: params.confirmUrl,
     scheduledTimeWib: params.scheduledTimeWib,
@@ -221,13 +233,15 @@ export async function sendUrgentWithEscalation(params: {
       stage: "urgent",
       dateWib: params.dateWib,
       recipient: params.recipient,
+      senderName: safeSenderName,
       confirmUrl: params.confirmUrl,
       includeIcs: false,
       customMessage: params.customMessage,
       scheduledTimeWib: params.scheduledTimeWib,
     }),
     sendLayeredEmail({
-      to: [{ name: env.SENDER_NAME, email: env.MY_EMAIL }],
+      fromName: safeSenderName,
+      to: [{ name: safeSenderName, email: env.MY_EMAIL }],
       subject: escalationEmail.subject,
       text: escalationEmail.text,
       html: escalationEmail.html,
@@ -239,28 +253,33 @@ export async function sendUrgentWithEscalation(params: {
       partnerResult.status === "fulfilled"
         ? { ok: true, messageId: partnerResult.value.messageId }
         : {
-          ok: false,
-          error:
-            partnerResult.reason instanceof Error
-              ? partnerResult.reason.message
-              : "Gagal mengirim email urgent ke penerima utama",
-        },
+            ok: false,
+            error:
+              partnerResult.reason instanceof Error
+                ? partnerResult.reason.message
+                : "Gagal mengirim email urgent ke penerima utama",
+          },
     escalation:
       escalationResult.status === "fulfilled"
         ? { ok: true, messageId: escalationResult.value.messageId }
         : {
-          ok: false,
-          error:
-            escalationResult.reason instanceof Error
-              ? escalationResult.reason.message
-              : "Gagal mengirim email eskalasi",
-        },
+            ok: false,
+            error:
+              escalationResult.reason instanceof Error
+                ? escalationResult.reason.message
+                : "Gagal mengirim email eskalasi",
+          },
   };
 }
 
 export async function sendItineraryInvitation(params: {
   mode: ItineraryRecipientMode;
   recipients: RecipientAddress[];
+  senderName?: string;
+  recipientName?: string;
+  categoryLabel?: string;
+  messageTone?: ItineraryMessageTone;
+  customIntroMessage?: string;
   subject: string;
   sessions: ItinerarySessionInput[];
   alarmMinutes: AlarmMinutes;
@@ -272,7 +291,8 @@ export async function sendItineraryInvitation(params: {
   attachmentFilenames: string[];
 }> {
   const env = getEnv();
-  const organizer = { name: env.SENDER_NAME, email: env.GMAIL_USER };
+  const safeSenderName = sanitizeSenderDisplayName(params.senderName, env.SENDER_NAME);
+  const organizer = { name: safeSenderName, email: env.GMAIL_USER };
 
   const resolvedSessions: ResolvedItinerarySession[] = params.sessions.map((session) => {
     const range = resolveWibSessionUtcRange(session.date, session.startTime, session.endTime);
@@ -309,26 +329,31 @@ export async function sendItineraryInvitation(params: {
 
   const icsAttachments = useSeparateAttachments
     ? icsEvents.map((eventItem, index) => ({
-      filename: `${String(index + 1).padStart(2, "0")}-${slugifyIcsFilename(eventItem.summary, `sesi-${index + 1}`)}`,
-      content: generateIcsCalendar([eventItem]),
-    }))
+        filename: `${String(index + 1).padStart(2, "0")}-${slugifyIcsFilename(eventItem.summary, `sesi-${index + 1}`)}`,
+        content: generateIcsCalendar([eventItem]),
+      }))
     : [
-      {
-        filename: slugifyIcsFilename(params.subject, "undangan-itinerary"),
-        content: combinedIcs,
-      },
-    ];
+        {
+          filename: slugifyIcsFilename(params.subject, "undangan-itinerary"),
+          content: combinedIcs,
+        },
+      ];
 
   const email = buildItineraryEmail({
     mode: params.mode,
     subject: params.subject,
-    senderName: env.SENDER_NAME,
+    senderName: safeSenderName,
+    recipientName: params.recipientName,
+    categoryLabel: params.categoryLabel,
+    messageTone: params.messageTone,
+    customIntroMessage: params.customIntroMessage,
     sessions: resolvedSessions,
     icsMode: useSeparateAttachments ? "separate" : "combined",
     alarmMinutes: params.alarmMinutes,
   });
 
   const sent = await sendLayeredEmail({
+    fromName: safeSenderName,
     to: params.recipients,
     subject: email.subject,
     text: email.text,

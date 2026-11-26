@@ -12,6 +12,7 @@ import {
   appendActivityLog,
   getActiveCustomMessage,
   getActiveRecipient,
+  getActiveSenderName,
   getAttendanceStatus,
 } from "@/lib/store";
 import { getTodayWibDate } from "@/lib/timezone";
@@ -31,13 +32,15 @@ export async function POST(request: Request) {
       return parsed.response;
     }
 
-    const { customNote, note, useActiveMessage, includeIcs, forceSend } = parsed.data;
+    const { customNote, note, senderName: overrideSenderName, useActiveMessage, includeIcs, forceSend } =
+      parsed.data;
     const todayWib = getTodayWibDate();
 
-    const [existingStatus, recipient, activeCustomMessage] = await Promise.all([
+    const [existingStatus, recipient, activeCustomMessage, defaultSenderName] = await Promise.all([
       getAttendanceStatus(todayWib),
       getActiveRecipient(),
       getActiveCustomMessage(todayWib),
+      getActiveSenderName(),
     ]);
 
     if (existingStatus && !forceSend) {
@@ -58,10 +61,12 @@ export async function POST(request: Request) {
     const token = createAttendanceToken(todayWib);
     const confirmUrl = `${baseUrl}/confirm?date=${encodeURIComponent(todayWib)}&token=${encodeURIComponent(token)}`;
 
+    const resolvedSenderName = overrideSenderName ?? defaultSenderName;
     const sent = await sendAttendanceReminder({
       stage: "manual",
       dateWib: todayWib,
       recipient,
+      senderName: resolvedSenderName,
       confirmUrl,
       includeIcs,
       customMessage: resolvedMessage,

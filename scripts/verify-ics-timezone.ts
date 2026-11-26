@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   buildAttendanceReminderEmail,
   buildEscalationEmail,
+  buildItineraryEmail,
 } from "../src/lib/email-templates";
 import {
   buildAttendanceCalendarSlot,
@@ -10,6 +11,8 @@ import {
   foldIcsLine,
   generateIcsCalendar,
 } from "../src/lib/ics";
+import { generateItineraryIntroMessage } from "../src/lib/itinerary-copy";
+import { sanitizeSenderDisplayName } from "../src/lib/security";
 import {
   getTodayWibDate,
   getYesterdayWibDate,
@@ -243,7 +246,75 @@ function runAllAssertions(): void {
     null,
   );
 
-  console.log("SEMUA VERIFIKASI TIMEZONE, ICS DINAMIS, EMAIL, & SMART DISPATCHER LULUS (11/11 suite).");
+  // 12. Sanitasi senderName (anti SMTP Header Injection & .ics ORGANIZER)
+  assert.equal(
+    sanitizeSenderDisplayName('Budi\r\nBcc: evil@attacker.com "Bot"\x00', "Default"),
+    "Budi Bcc: evil@attacker.com 'Bot'",
+  );
+  assert.equal(sanitizeSenderDisplayName("   \r\n  ", "Fallback Bot"), "Fallback Bot");
+  assert.equal(sanitizeSenderDisplayName("A".repeat(80), "Fallback").length, 60);
+
+  const sanitizedOrganizerIcs = unfoldIcs(
+    generateIcsCalendar([
+      {
+        uidSeed: "sanitized-org-1@test",
+        summary: "Rapat Tim",
+        date: "2026-11-26",
+        startTime: "10:00",
+        endTime: "11:00",
+        organizer: {
+          name: 'Tim\r\nEvil "Ops"',
+          email: "bot@example.com",
+        },
+        attendees: [{ email: "guest@example.com", name: "Tamu" }],
+        alarmMinutes: 30,
+      },
+    ]),
+  );
+  assert.ok(sanitizedOrganizerIcs.includes("ORGANIZER;CN=\"Tim Evil 'Ops'\":mailto:bot@example.com"));
+  assert.ok(!sanitizedOrganizerIcs.includes("ORGANIZER;CN=\"Tim\r\n"));
+
+  // 13. Generator pesan pembuka & XSS escape untuk kategori/pesan pembuka/senderName di email itinerary
+  const formalEventIntro = generateItineraryIntroMessage({
+    mode: "event",
+    tone: "formal",
+    senderName: "Panitia Acara",
+    categoryLabel: "Meeting & Diskusi",
+    sessionCount: 2,
+  });
+  assert.ok(formalEventIntro.includes("Panitia Acara"));
+  assert.ok(formalEventIntro.includes("Meeting & Diskusi"));
+  assert.ok(formalEventIntro.includes("2 sesi"));
+
+  const xssSessionSlot = resolveWibSessionUtcRange("2026-11-26", "18:00", "19:30");
+  const xssItineraryEmail = buildItineraryEmail({
+    mode: "event",
+    subject: "Gathering <Komunitas>",
+    senderName: 'Panitia <img src=x onerror="alert(1)">',
+    categoryLabel: "<script>alert('cat')</script>",
+    messageTone: "custom",
+    customIntroMessage: "Baris 1 <b onmouseover=alert(1)>bold</b>\nBaris 2",
+    sessions: [
+      {
+        title: "Sesi Pembukaan",
+        date: "2026-11-26",
+        startTime: "18:00",
+        endTime: "19:30",
+        ...xssSessionSlot,
+      },
+    ],
+    icsMode: "combined",
+    alarmMinutes: 30,
+  });
+  assert.ok(!xssItineraryEmail.html.includes("<script>"));
+  assert.ok(!xssItineraryEmail.html.includes("<img src=x"));
+  assert.ok(!xssItineraryEmail.html.includes("<b onmouseover"));
+  assert.ok(xssItineraryEmail.html.includes("&lt;script&gt;alert(&#39;cat&#39;)&lt;/script&gt;"));
+  assert.ok(xssItineraryEmail.html.includes("Baris 1 &lt;b onmouseover=alert(1)&gt;bold&lt;/b&gt;<br />Baris 2"));
+  assert.ok(xssItineraryEmail.text.includes("Meeting") === false);
+  assert.ok(xssItineraryEmail.text.includes("Baris 1"));
+
+  console.log("SEMUA VERIFIKASI TIMEZONE, ICS DINAMIS, SANITASI SENDER, EMAIL, & SMART DISPATCHER LULUS (13/13 suite).");
 }
 
 runAllAssertions();

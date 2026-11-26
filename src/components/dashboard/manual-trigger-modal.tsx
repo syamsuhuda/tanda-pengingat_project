@@ -8,6 +8,7 @@ interface ManualTriggerModalProps {
   todayWib: string;
   recipientName: string;
   recipientEmail: string;
+  defaultSenderName: string;
   isAlreadyConfirmed: boolean;
   activeCustomMessage: string | null;
   onClose: () => void;
@@ -19,6 +20,7 @@ export function ManualTriggerModal({
   todayWib,
   recipientName,
   recipientEmail,
+  defaultSenderName,
   isAlreadyConfirmed,
   activeCustomMessage,
   onClose,
@@ -26,6 +28,8 @@ export function ManualTriggerModal({
 }: ManualTriggerModalProps) {
   const [note, setNote] = useState(activeCustomMessage ?? "");
   const [noteTouched, setNoteTouched] = useState(false);
+  const [overrideSenderOpen, setOverrideSenderOpen] = useState(false);
+  const [senderOverride, setSenderOverride] = useState(defaultSenderName);
   const [includeIcs, setIncludeIcs] = useState(true);
   const [forceSend, setForceSend] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -38,6 +42,8 @@ export function ManualTriggerModal({
     if (!open) return;
     setFeedback(null);
     setForceSend(false);
+    setOverrideSenderOpen(false);
+    setSenderOverride(defaultSenderName);
     if (!noteTouched) {
       setNote(activeCustomMessage ?? "");
     }
@@ -51,7 +57,7 @@ export function ManualTriggerModal({
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [open, activeCustomMessage, noteTouched, submitting, onClose]);
+  }, [open, activeCustomMessage, defaultSenderName, noteTouched, submitting, onClose]);
 
   if (!open) {
     return null;
@@ -76,6 +82,10 @@ export function ManualTriggerModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           customNote: note.trim() || undefined,
+          senderName:
+            overrideSenderOpen && senderOverride.trim()
+              ? senderOverride.trim()
+              : undefined,
           useActiveMessage: false,
           includeIcs,
           forceSend: isAlreadyConfirmed ? forceSend : false,
@@ -202,6 +212,35 @@ export function ManualTriggerModal({
             />
             <span>Sertakan undangan kalender &amp; tombol Google Calendar</span>
           </label>
+
+          <div>
+            <button
+              type="button"
+              onClick={() => setOverrideSenderOpen((prev) => !prev)}
+              className="text-xs font-semibold text-[var(--ink-muted)] hover:text-[var(--ink)] hover:underline"
+            >
+              {overrideSenderOpen
+                ? "Tutup ubah nama pengirim"
+                : `Ubah nama pengirim untuk kiriman ini (default: ${defaultSenderName})`}
+            </button>
+
+            {overrideSenderOpen ? (
+              <div className="mt-2">
+                <label htmlFor="modal-sender-override" className="sr-only">
+                  Nama pengirim khusus kiriman ini
+                </label>
+                <input
+                  id="modal-sender-override"
+                  type="text"
+                  maxLength={60}
+                  value={senderOverride}
+                  onChange={(event) => setSenderOverride(event.target.value)}
+                  placeholder="Ketik nama pengirim khusus..."
+                  className="min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-sm text-[var(--ink)]"
+                />
+              </div>
+            ) : null}
+          </div>
 
           {isAlreadyConfirmed ? (
             <label

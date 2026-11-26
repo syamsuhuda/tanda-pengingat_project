@@ -65,6 +65,13 @@ export const triggerAttendanceSchema = z.object({
     .max(500, "Catatan tambahan maksimal 500 karakter")
     .optional()
     .transform((val) => (val ? val : undefined)),
+  senderName: z
+    .string()
+    .trim()
+    .min(1, "Nama pengirim minimal 1 karakter")
+    .max(60, "Nama pengirim maksimal 60 karakter")
+    .optional()
+    .transform((val) => (val ? val : undefined)),
   useActiveMessage: z.boolean().optional().default(false),
   includeIcs: z.boolean().default(true),
   forceSend: z.boolean().default(false),
@@ -87,6 +94,14 @@ export const recipientConfigSchema = z.object({
     .min(1, "Nama pasangan wajib diisi")
     .max(60, "Nama pasangan maksimal 60 karakter"),
   email: z.string().trim().email("Format email pasangan tidak valid").max(160),
+});
+
+export const senderConfigSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "Nama pengirim wajib diisi")
+    .max(60, "Nama pengirim maksimal 60 karakter"),
 });
 
 export const customMessageSchema = z.object({
@@ -209,12 +224,33 @@ export const itinerarySessionSchema = z
   });
 
 export const sendItinerarySchema = z.object({
-  mode: z.enum(["date", "friends"]),
+  mode: z.enum(["date", "event", "friends"]),
   contactIds: z.array(z.string().trim().min(1)).max(30).default([]),
   manualEmails: z
     .array(z.string().trim().email("Salah satu email manual tidak valid").max(160))
     .max(30)
     .default([]),
+  senderName: z
+    .string()
+    .trim()
+    .min(1, "Nama pengirim minimal 1 karakter")
+    .max(60, "Nama pengirim maksimal 60 karakter")
+    .optional()
+    .transform((val) => (val ? val : undefined)),
+  categoryLabel: z
+    .string()
+    .trim()
+    .min(1, "Kategori acara minimal 1 karakter")
+    .max(40, "Kategori acara maksimal 40 karakter")
+    .optional()
+    .transform((val) => (val ? val : undefined)),
+  messageTone: z.enum(["formal", "natural", "casual", "custom"]).optional().default("natural"),
+  customIntroMessage: z
+    .string()
+    .trim()
+    .max(600, "Pesan pembuka maksimal 600 karakter")
+    .optional()
+    .transform((val) => (val ? val : undefined)),
   subject: z
     .string()
     .trim()

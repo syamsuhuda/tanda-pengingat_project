@@ -18,6 +18,9 @@ import type {
 
 interface ItineraryPreviewProps {
   mode: ItineraryRecipientMode;
+  senderName: string;
+  categoryLabel: string;
+  introMessage: string;
   recipientCount: number;
   partnerName: string;
   subject: string;
@@ -28,6 +31,9 @@ interface ItineraryPreviewProps {
 
 export function ItineraryPreview({
   mode,
+  senderName,
+  categoryLabel,
+  introMessage,
   recipientCount,
   partnerName,
   subject,
@@ -35,6 +41,10 @@ export function ItineraryPreview({
   icsMode,
   sessions,
 }: ItineraryPreviewProps) {
+  const displaySender = senderName.trim() || "Pengirim";
+  const displayCategory = categoryLabel.trim() || (mode === "date" ? "Date Plan" : "Event Plan");
+  const displayIntro = introMessage.trim();
+
   const icsLabel =
     sessions.length <= 1
       ? "1 file kalender"
@@ -68,19 +78,29 @@ export function ItineraryPreview({
         <div className="flex items-center justify-between gap-2">
           <span className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] bg-[var(--surface)] px-2.5 py-0.5 text-[11px] font-bold text-[var(--accent)]">
             <Ticket className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-            <span>{mode === "date" ? "Tiket Date" : "Tiket Acara"}</span>
+            <span>{displayCategory}</span>
           </span>
           <span className="font-mono-num text-[11px] font-semibold text-[var(--ink-muted)]">
             {sessions.length} sesi{totalMinutes > 0 ? ` · ${formatDurationIndonesian(totalMinutes)}` : ""}
           </span>
         </div>
 
+        <p className="mt-2.5 text-xs font-medium text-[var(--ink-muted)]">
+          Dari: <span className="font-semibold text-[var(--ink)]">{displaySender}</span>
+        </p>
+
         <h2
           id="itinerary-preview-heading"
-          className="font-display mt-2.5 text-xl font-bold text-[var(--ink)]"
+          className="font-display mt-1 text-xl font-bold text-[var(--ink)]"
         >
           {subject.trim() || "Judul Rencana Kamu"}
         </h2>
+
+        {displayIntro ? (
+          <p className="mt-2 whitespace-pre-line text-xs leading-relaxed text-[var(--ink-muted)]">
+            {displayIntro}
+          </p>
+        ) : null}
 
         <div className="mt-2.5 flex flex-wrap items-center gap-x-3.5 gap-y-1 text-xs font-medium text-[var(--ink-muted)]">
           <span className="inline-flex items-center gap-1">

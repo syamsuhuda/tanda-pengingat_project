@@ -120,6 +120,7 @@ export async function GET(request: Request) {
       nowWibTime: getNowWibTimeLabel(now),
       partnerName: snapshot.recipient.name,
       partnerEmail: snapshot.recipient.email,
+      senderName: snapshot.senderName,
       recipient: snapshot.recipient,
       customMessage: snapshot.customMessage,
       todayOffDay,

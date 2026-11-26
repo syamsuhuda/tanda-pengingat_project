@@ -1,9 +1,11 @@
 import crypto from "node:crypto";
 import { getEnv } from "./env";
 import { getRedis } from "./redis";
+import { sanitizeSenderDisplayName } from "./security";
 import { getNowWibIso, isValidHmTime, isValidYmdDate } from "./timezone";
 import type {
   ActiveRecipientConfig,
+  ActiveSenderConfig,
   ActivityLogEntry,
   ActivityLogResult,
   ActivityLogType,
@@ -31,6 +33,7 @@ const REDIS_KEYS = {
   attendanceSent: (dateWib: string, stage: AttendanceStage) => `absen:sent:${dateWib}:${stage}`,
   botPaused: "bot:config:paused",
   botRecipient: "bot:config:recipient",
+  botSender: "bot:config:sender",
   botCustomMessage: "bot:config:custom_message",
   botOffDays: "bot:config:off_days",
   botSchedule: "bot:config:schedule",
@@ -252,6 +255,39 @@ export async function setActiveRecipient(input: {
   await appendActivityLog({
     type: "recipient_updated",
     summary: `Penerima aktif diperbarui ke ${config.name} (${config.email}).`,
+    result: "success",
+  });
+
+  return config;
+}
+
+export async function getActiveSenderName(): Promise<string> {
+  const env = getEnv();
+  const redis = getRedis();
+  const raw = await redis.get(REDIS_KEYS.botSender);
+  const parsed = parseStoredJson<ActiveSenderConfig>(raw);
+
+  if (parsed && typeof parsed.name === "string" && parsed.name.trim().length > 0) {
+    return sanitizeSenderDisplayName(parsed.name, env.SENDER_NAME);
+  }
+
+  return sanitizeSenderDisplayName(env.SENDER_NAME);
+}
+
+export async function setActiveSenderName(name: string): Promise<ActiveSenderConfig> {
+  const env = getEnv();
+  const sanitized = sanitizeSenderDisplayName(name, env.SENDER_NAME);
+  const config: ActiveSenderConfig = {
+    name: sanitized,
+    updatedAt: getNowWibIso(),
+  };
+
+  const redis = getRedis();
+  await redis.set(REDIS_KEYS.botSender, JSON.stringify(config));
+
+  await appendActivityLog({
+    type: "sender_updated",
+    summary: `Nama pengirim default diperbarui ke "${config.name}".`,
     result: "success",
   });
 
@@ -522,6 +558,7 @@ export interface DashboardRawSnapshot {
   pauseConfig: BotPauseConfig;
   logs: ActivityLogEntry[];
   recipient: ActiveRecipientConfig;
+  senderName: string;
   customMessage: CustomMessageConfig | null;
   upcomingOffDays: OffDayEntry[];
   schedule: AttendanceScheduleConfig;
@@ -547,6 +584,7 @@ export async function getDashboardSnapshotViaPipeline(
   pipeline.hgetall(REDIS_KEYS.botOffDays);
   pipeline.get(REDIS_KEYS.botSchedule);
   pipeline.get(REDIS_KEYS.dashboardVersion);
+  pipeline.get(REDIS_KEYS.botSender);
 
   const results = await pipeline.exec<unknown[]>();
 
@@ -660,12 +698,19 @@ export async function getDashboardSnapshotViaPipeline(
     await redis.set(REDIS_KEYS.dashboardVersion, version);
   }
 
+  const rawSender = parseStoredJson<ActiveSenderConfig>(results[11]);
+  const senderName =
+    rawSender && typeof rawSender.name === "string" && rawSender.name.trim().length > 0
+      ? sanitizeSenderDisplayName(rawSender.name, env.SENDER_NAME)
+      : sanitizeSenderDisplayName(env.SENDER_NAME);
+
   return {
     attendance,
     sentMap,
     pauseConfig,
     logs,
     recipient,
+    senderName,
     customMessage,
     upcomingOffDays,
     schedule,

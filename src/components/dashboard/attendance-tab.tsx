@@ -561,9 +561,10 @@ export function AttendanceTab({
         <div className="space-y-5 lg:col-span-6">
           <BotSettingsCard
             recipient={data.recipient}
+            senderName={data.senderName}
             schedule={data.schedule}
             onRecipientUpdated={onRecipientUpdated}
-            onScheduleChanged={onRefresh}
+            onConfigChanged={onRefresh}
           />
 
           <ActivityLogsCard logs={data.logs} />
@@ -575,6 +576,7 @@ export function AttendanceTab({
         todayWib={data.todayWib}
         recipientName={data.recipient.name}
         recipientEmail={data.recipient.email}
+        defaultSenderName={data.senderName}
         isAlreadyConfirmed={isConfirmed}
         activeCustomMessage={data.customMessage?.message ?? null}
         onClose={() => setManualModalOpen(false)}

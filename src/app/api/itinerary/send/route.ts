@@ -5,8 +5,17 @@ import {
   parseJsonBody,
   requireAuthenticatedSession,
 } from "@/lib/api-helpers";
+import {
+  DEFAULT_CATEGORY_BY_MODE,
+  normalizeItineraryMode,
+} from "@/lib/itinerary-copy";
 import { sendItineraryInvitation } from "@/lib/mailer";
-import { appendActivityLog, getActiveRecipient, listFriendContacts } from "@/lib/store";
+import {
+  appendActivityLog,
+  getActiveRecipient,
+  getActiveSenderName,
+  listFriendContacts,
+} from "@/lib/store";
 import type { RecipientAddress } from "@/lib/types";
 import { sendItinerarySchema } from "@/lib/validators";
 
@@ -26,15 +35,32 @@ export async function POST(request: Request) {
       return parsed.response;
     }
 
-    const { mode, contactIds, manualEmails, subject, alarmMinutes, icsMode, sessions } =
-      parsed.data;
+    const {
+      mode: rawMode,
+      contactIds,
+      manualEmails,
+      senderName: customSenderName,
+      categoryLabel: customCategoryLabel,
+      messageTone,
+      customIntroMessage,
+      subject,
+      alarmMinutes,
+      icsMode,
+      sessions,
+    } = parsed.data;
+
+    const mode = normalizeItineraryMode(rawMode);
+    const resolvedSenderName = customSenderName ?? (await getActiveSenderName());
+    const resolvedCategoryLabel = customCategoryLabel ?? DEFAULT_CATEGORY_BY_MODE[mode];
 
     let recipients: RecipientAddress[] = [];
+    let dateRecipientName: string | undefined;
 
     if (mode === "date") {
       // Pada mode Date Itinerary, server selalu mengambil penerima aktif terbaru dari Redis/env.
       const activeRecipient = await getActiveRecipient();
       recipients = [{ name: activeRecipient.name, email: activeRecipient.email }];
+      dateRecipientName = activeRecipient.name;
     } else {
       const allContacts = await listFriendContacts();
       const contactById = new Map(allContacts.map((c) => [c.id, c]));
@@ -79,16 +105,21 @@ export async function POST(request: Request) {
     const result = await sendItineraryInvitation({
       mode,
       recipients,
+      senderName: resolvedSenderName,
+      recipientName: dateRecipientName,
+      categoryLabel: resolvedCategoryLabel,
+      messageTone,
+      customIntroMessage,
       subject,
       sessions,
       alarmMinutes,
       icsMode,
     });
 
-    const modeSummary = mode === "date" ? "Date Itinerary" : "Undangan Teman";
+    const modeSummary = mode === "date" ? "Date Itinerary" : "Acara & Kegiatan";
     await appendActivityLog({
       type: "itinerary_sent",
-      summary: `${modeSummary} "${subject}" (${result.sessionCount} sesi) terkirim ke ${result.recipientCount} penerima.`,
+      summary: `${modeSummary} [${resolvedCategoryLabel}] "${subject}" (${result.sessionCount} sesi) oleh ${resolvedSenderName} terkirim ke ${result.recipientCount} penerima.`,
       result: "success",
     });
 

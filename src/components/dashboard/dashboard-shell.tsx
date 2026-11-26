@@ -421,6 +421,7 @@ export function DashboardShell() {
                   todayWib={statusData.todayWib}
                   partnerName={statusData.recipient.name}
                   partnerEmail={statusData.recipient.email}
+                  defaultSenderName={statusData.senderName}
                   contacts={contacts}
                   contactGroups={contactGroups}
                   onContactsChanged={loadContacts}
