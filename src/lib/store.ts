@@ -1,9 +1,16 @@
 import crypto from "node:crypto";
 import { getEnv } from "./env";
 import { getRedis } from "./redis";
-import { sanitizeSenderDisplayName } from "./security";
+import {
+  hashPinScrypt,
+  sanitizeSenderDisplayName,
+  SESSION_VERSION_REDIS_KEY,
+  verifyPin,
+  verifyPinScrypt,
+} from "./security";
 import { getNowWibIso, isValidHmTime, isValidYmdDate } from "./timezone";
 import type {
+  ActivePinConfig,
   ActiveRecipientConfig,
   ActiveSenderConfig,
   ActivityLogEntry,
@@ -18,6 +25,7 @@ import type {
   CustomMessageScope,
   FriendContact,
   OffDayEntry,
+  ResetOtpRecord,
   ScheduleStageConfig,
   TodayOffDayStatus,
 } from "./types";
@@ -26,6 +34,11 @@ export const ATTENDANCE_STATUS_TTL_SECONDS = 172_800; // 48 jam
 export const ATTENDANCE_SENT_TTL_SECONDS = 86_400; // 24 jam
 export const AUTH_RATELIMIT_TTL_SECONDS = 900; // 15 menit
 export const AUTH_RATELIMIT_MAX_ATTEMPTS = 5;
+export const AUTH_RESET_OTP_TTL_SECONDS = 600; // 10 menit
+export const AUTH_RESET_OTP_MAX_ATTEMPTS = 5;
+export const AUTH_RESET_COOLDOWN_SECONDS = 60;
+export const AUTH_RESET_RATELIMIT_TTL_SECONDS = 900; // 15 menit
+export const AUTH_RESET_RATELIMIT_MAX_REQUESTS = 3;
 export const ACTIVITY_LOG_MAX_ENTRIES = 30;
 
 const REDIS_KEYS = {
@@ -40,6 +53,11 @@ const REDIS_KEYS = {
   dashboardVersion: "bot:meta:version",
   friendContacts: "contacts:friends",
   activityLogs: "logs:activity",
+  authPinConfig: "auth:config:pin",
+  authSessionVersion: SESSION_VERSION_REDIS_KEY,
+  authResetOtp: "auth:reset:otp",
+  authResetCooldown: "auth:reset:cooldown",
+  authResetRateLimit: (ipHash: string) => `auth:reset:ratelimit:${ipHash}`,
   authRateLimit: (ipHash: string) => `auth:ratelimit:${ipHash}`,
 } as const;
 
@@ -559,6 +577,7 @@ export interface DashboardRawSnapshot {
   logs: ActivityLogEntry[];
   recipient: ActiveRecipientConfig;
   senderName: string;
+  pinMigrationRecommended: boolean;
   customMessage: CustomMessageConfig | null;
   upcomingOffDays: OffDayEntry[];
   schedule: AttendanceScheduleConfig;
@@ -585,6 +604,7 @@ export async function getDashboardSnapshotViaPipeline(
   pipeline.get(REDIS_KEYS.botSchedule);
   pipeline.get(REDIS_KEYS.dashboardVersion);
   pipeline.get(REDIS_KEYS.botSender);
+  pipeline.get(REDIS_KEYS.authPinConfig);
 
   const results = await pipeline.exec<unknown[]>();
 
@@ -704,6 +724,14 @@ export async function getDashboardSnapshotViaPipeline(
       ? sanitizeSenderDisplayName(rawSender.name, env.SENDER_NAME)
       : sanitizeSenderDisplayName(env.SENDER_NAME);
 
+  const rawPinConfig = parseStoredJson<ActivePinConfig>(results[12]);
+  const hasCustomPin = Boolean(
+    rawPinConfig &&
+      typeof rawPinConfig.hash === "string" &&
+      rawPinConfig.hash.startsWith("scrypt$") &&
+      rawPinConfig.length === 6,
+  );
+
   return {
     attendance,
     sentMap,
@@ -711,6 +739,7 @@ export async function getDashboardSnapshotViaPipeline(
     logs,
     recipient,
     senderName,
+    pinMigrationRecommended: !hasCustomPin,
     customMessage,
     upcomingOffDays,
     schedule,
@@ -893,4 +922,169 @@ export async function recordFailedLoginAttempt(ipHash: string): Promise<RateLimi
 export async function clearLoginRateLimit(ipHash: string): Promise<void> {
   const redis = getRedis();
   await redis.del(REDIS_KEYS.authRateLimit(ipHash));
+}
+
+export async function getActivePinConfig(): Promise<ActivePinConfig | null> {
+  const redis = getRedis();
+  const parsed = parseStoredJson<ActivePinConfig>(await redis.get(REDIS_KEYS.authPinConfig));
+  if (parsed && typeof parsed.hash === "string" && parsed.hash.startsWith("scrypt$") && parsed.length === 6) {
+    return parsed;
+  }
+  return null;
+}
+
+export async function verifyActivePin(inputPin: string): Promise<{
+  valid: boolean;
+  usesCustomPin: boolean;
+}> {
+  const activeConfig = await getActivePinConfig();
+  if (activeConfig) {
+    const valid = /^\d{6}$/.test(inputPin) && verifyPinScrypt(inputPin, activeConfig.hash);
+    return { valid, usesCustomPin: true };
+  }
+  return {
+    valid: verifyPin(inputPin),
+    usesCustomPin: false,
+  };
+}
+
+export async function getSessionVersion(): Promise<string> {
+  const redis = getRedis();
+  const raw = await redis.get<string | number>(REDIS_KEYS.authSessionVersion);
+  if (raw !== null && raw !== undefined && String(raw).trim().length > 0) {
+    return String(raw).trim();
+  }
+  return "1";
+}
+
+export async function rotateSessionVersion(): Promise<string> {
+  const nextVersion = `${Date.now()}-${crypto.randomBytes(6).toString("hex")}`;
+  const redis = getRedis();
+  await redis.set(REDIS_KEYS.authSessionVersion, nextVersion);
+  return nextVersion;
+}
+
+export async function setActivePinConfig(
+  newPin: string,
+  logType: "pin_updated" | "pin_reset" = "pin_updated",
+): Promise<{ sessionVersion: string; updatedAt: string }> {
+  const updatedAt = getNowWibIso();
+  const config: ActivePinConfig = {
+    hash: hashPinScrypt(newPin),
+    length: 6,
+    updatedAt,
+  };
+  const nextSessionVersion = `${Date.now()}-${crypto.randomBytes(6).toString("hex")}`;
+
+  const redis = getRedis();
+  const pipeline = redis.pipeline();
+  pipeline.set(REDIS_KEYS.authPinConfig, JSON.stringify(config));
+  pipeline.set(REDIS_KEYS.authSessionVersion, nextSessionVersion);
+  await pipeline.exec();
+
+  await appendActivityLog({
+    type: logType,
+    summary:
+      logType === "pin_reset"
+        ? "PIN akses dashboard berhasil di-reset melalui verifikasi OTP email."
+        : "PIN akses dashboard berhasil diperbarui ke PIN 6 digit baru.",
+    result: "success",
+  });
+
+  return { sessionVersion: nextSessionVersion, updatedAt };
+}
+
+export async function getForgotPinRateLimitState(ipHash: string): Promise<{
+  blocked: boolean;
+  requests: number;
+  remainingRequests: number;
+}> {
+  const redis = getRedis();
+  const raw = await redis.get<number | string>(REDIS_KEYS.authResetRateLimit(ipHash));
+  const requests = Number(raw ?? 0);
+  const safeRequests = Number.isFinite(requests) && requests > 0 ? requests : 0;
+
+  return {
+    blocked: safeRequests >= AUTH_RESET_RATELIMIT_MAX_REQUESTS,
+    requests: safeRequests,
+    remainingRequests: Math.max(0, AUTH_RESET_RATELIMIT_MAX_REQUESTS - safeRequests),
+  };
+}
+
+export async function recordForgotPinRequest(ipHash: string): Promise<void> {
+  const redis = getRedis();
+  const key = REDIS_KEYS.authResetRateLimit(ipHash);
+  const count = await redis.incr(key);
+  if (count === 1) {
+    await redis.expire(key, AUTH_RESET_RATELIMIT_TTL_SECONDS);
+  }
+}
+
+export async function getForgotPinCooldownRemaining(): Promise<number> {
+  const redis = getRedis();
+  const ttl = await redis.ttl(REDIS_KEYS.authResetCooldown);
+  return typeof ttl === "number" && ttl > 0 ? ttl : 0;
+}
+
+export async function setForgotPinCooldown(): Promise<void> {
+  const redis = getRedis();
+  await redis.set(REDIS_KEYS.authResetCooldown, "1", { ex: AUTH_RESET_COOLDOWN_SECONDS });
+}
+
+export async function saveResetOtp(otpHash: string, salt: string): Promise<void> {
+  const record: ResetOtpRecord = {
+    otpHash,
+    salt,
+    attempts: 0,
+    createdAt: getNowWibIso(),
+  };
+  const redis = getRedis();
+  await redis.set(REDIS_KEYS.authResetOtp, JSON.stringify(record), {
+    ex: AUTH_RESET_OTP_TTL_SECONDS,
+  });
+}
+
+export async function getResetOtp(): Promise<ResetOtpRecord | null> {
+  const redis = getRedis();
+  const parsed = parseStoredJson<ResetOtpRecord>(await redis.get(REDIS_KEYS.authResetOtp));
+  if (
+    parsed &&
+    typeof parsed.otpHash === "string" &&
+    typeof parsed.salt === "string" &&
+    typeof parsed.attempts === "number"
+  ) {
+    return parsed;
+  }
+  return null;
+}
+
+export async function incrementResetOtpAttempts(current: ResetOtpRecord): Promise<{
+  exhausted: boolean;
+  remainingAttempts: number;
+}> {
+  const nextAttempts = current.attempts + 1;
+  const redis = getRedis();
+
+  if (nextAttempts >= AUTH_RESET_OTP_MAX_ATTEMPTS) {
+    await redis.del(REDIS_KEYS.authResetOtp);
+    return { exhausted: true, remainingAttempts: 0 };
+  }
+
+  const remainingTtl = await redis.ttl(REDIS_KEYS.authResetOtp);
+  const ex = typeof remainingTtl === "number" && remainingTtl > 10 ? remainingTtl : 60;
+  await redis.set(
+    REDIS_KEYS.authResetOtp,
+    JSON.stringify({ ...current, attempts: nextAttempts }),
+    { ex },
+  );
+
+  return {
+    exhausted: false,
+    remainingAttempts: Math.max(0, AUTH_RESET_OTP_MAX_ATTEMPTS - nextAttempts),
+  };
+}
+
+export async function deleteResetOtp(): Promise<void> {
+  const redis = getRedis();
+  await redis.del(REDIS_KEYS.authResetOtp);
 }

@@ -30,9 +30,49 @@ const optionalMapsUrlSchema = z
   .optional()
   .transform((val) => (val ? val : undefined));
 
+export const strictSixDigitPinSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{6}$/, "PIN harus tepat 6 digit angka");
+
 export const loginSchema = z.object({
   pin: z.string().trim().min(4, "PIN minimal 4 karakter").max(64, "PIN terlalu panjang"),
 });
+
+export const changePinSchema = z
+  .object({
+    currentPin: z
+      .string()
+      .trim()
+      .min(4, "PIN saat ini minimal 4 karakter")
+      .max(64, "PIN saat ini terlalu panjang"),
+    newPin: strictSixDigitPinSchema,
+    confirmNewPin: strictSixDigitPinSchema,
+  })
+  .refine((data) => data.newPin === data.confirmNewPin, {
+    message: "Konfirmasi PIN baru tidak cocok",
+    path: ["confirmNewPin"],
+  })
+  .refine((data) => data.newPin !== data.currentPin, {
+    message: "PIN baru tidak boleh sama dengan PIN saat ini",
+    path: ["newPin"],
+  });
+
+export const forgotPinRequestSchema = z.object({});
+
+export const forgotPinResetSchema = z
+  .object({
+    otp: z
+      .string()
+      .trim()
+      .regex(/^\d{6}$/, "Kode verifikasi harus tepat 6 digit angka"),
+    newPin: strictSixDigitPinSchema,
+    confirmNewPin: strictSixDigitPinSchema,
+  })
+  .refine((data) => data.newPin === data.confirmNewPin, {
+    message: "Konfirmasi PIN baru tidak cocok",
+    path: ["confirmNewPin"],
+  });
 
 export const cronAttendanceSchema = z.object({
   stage: z.enum(["auto", "morning", "afternoon", "urgent"]).default("auto"),

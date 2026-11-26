@@ -80,7 +80,22 @@ export type ActivityLogType =
   | "off_days_updated"
   | "schedule_updated"
   | "itinerary_sent"
-  | "contact_updated";
+  | "contact_updated"
+  | "pin_updated"
+  | "pin_reset";
+
+export interface ActivePinConfig {
+  hash: string;
+  length: 6;
+  updatedAt: string;
+}
+
+export interface ResetOtpRecord {
+  otpHash: string;
+  salt: string;
+  attempts: number;
+  createdAt: string;
+}
 
 export type ActivityLogResult = "success" | "skipped" | "partial" | "error";
 
@@ -114,6 +129,7 @@ export interface DashboardStatusData {
   partnerName: string;
   partnerEmail: string;
   senderName: string;
+  pinMigrationRecommended: boolean;
   recipient: ActiveRecipientConfig;
   customMessage: CustomMessageConfig | null;
   todayOffDay: TodayOffDayStatus;

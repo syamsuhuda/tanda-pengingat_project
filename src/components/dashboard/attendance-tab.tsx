@@ -272,6 +272,24 @@ export function AttendanceTab({
 
   return (
     <div className="space-y-5">
+      {data.pinMigrationRecommended ? (
+        <div
+          role="status"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[var(--warning-border)] bg-[var(--warning-bg)] px-4 py-3 text-xs leading-relaxed text-[var(--warning-fg)]"
+        >
+          <div className="flex items-start gap-2">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
+            <span>
+              Saat ini kamu masih memakai PIN bawaan lama. Disarankan memperbarui ke <strong>PIN 6 digit</strong> melalui menu{" "}
+              <a href="#bot-settings-heading" className="font-bold underline">
+                Pengaturan Bot → Keamanan
+              </a>
+              .
+            </span>
+          </div>
+        </div>
+      ) : null}
+
       <section
         aria-labelledby="today-status-heading"
         className={`rounded-2xl border bg-[var(--surface)] p-5 shadow-xs sm:p-6 ${heroBorderClass}`}

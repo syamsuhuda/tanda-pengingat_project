@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import nodemailer from "nodemailer";
 import type Mail from "nodemailer/lib/mailer";
 import { getEnv } from "./env";
@@ -5,6 +6,8 @@ import {
   buildAttendanceReminderEmail,
   buildEscalationEmail,
   buildItineraryEmail,
+  buildPinResetOtpEmail,
+  buildPinResetSuccessEmail,
 } from "./email-templates";
 import {
   buildAttendanceCalendarSlot,
@@ -60,9 +63,29 @@ interface LayeredEmailParams {
   html: string;
   inlineIcs?: string;
   icsAttachments?: Array<{ filename: string; content: string }>;
+  entityRefId?: string;
 }
 
-async function sendLayeredEmail(params: LayeredEmailParams): Promise<{ messageId: string }> {
+export interface LayeredEmailResult {
+  messageId: string;
+  accepted: string[];
+  rejected: string[];
+}
+
+function normalizeSmtpAddressList(list: unknown): string[] {
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((item) => {
+      if (typeof item === "string") return item.trim();
+      if (item && typeof item === "object" && "address" in item && typeof item.address === "string") {
+        return item.address.trim();
+      }
+      return "";
+    })
+    .filter(Boolean);
+}
+
+async function sendLayeredEmail(params: LayeredEmailParams): Promise<LayeredEmailResult> {
   const env = getEnv();
   const transporter = createGmailTransporter();
   const safeFromName = sanitizeSenderDisplayName(params.fromName, env.SENDER_NAME);
@@ -73,6 +96,11 @@ async function sendLayeredEmail(params: LayeredEmailParams): Promise<{ messageId
     subject: params.subject,
     text: params.text,
     html: params.html,
+    headers: params.entityRefId
+      ? {
+          "X-Entity-Ref-ID": params.entityRefId,
+        }
+      : undefined,
   };
 
   if (params.inlineIcs) {
@@ -93,8 +121,29 @@ async function sendLayeredEmail(params: LayeredEmailParams): Promise<{ messageId
     }));
   }
 
-  const info = await transporter.sendMail(mailOptions);
-  return { messageId: info.messageId };
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    const accepted = normalizeSmtpAddressList(info.accepted);
+    const rejected = normalizeSmtpAddressList(info.rejected);
+
+    if (accepted.length === 0) {
+      const error = new Error(
+        rejected.length > 0
+          ? `Server SMTP menolak seluruh penerima: ${rejected.join(", ")}`
+          : "Server SMTP tidak menerima alamat penerima mana pun.",
+      );
+      error.name = "SmtpNoAcceptedRecipientsError";
+      throw error;
+    }
+
+    return {
+      messageId: info.messageId,
+      accepted,
+      rejected,
+    };
+  } finally {
+    transporter.close();
+  }
 }
 
 export async function sendAttendanceReminder(params: {
@@ -285,7 +334,10 @@ export async function sendItineraryInvitation(params: {
   alarmMinutes: AlarmMinutes;
   icsMode: IcsBundleMode;
 }): Promise<{
+  batchId: string;
   messageId: string;
+  accepted: string[];
+  rejected: string[];
   recipientCount: number;
   sessionCount: number;
   attachmentFilenames: string[];
@@ -293,6 +345,7 @@ export async function sendItineraryInvitation(params: {
   const env = getEnv();
   const safeSenderName = sanitizeSenderDisplayName(params.senderName, env.SENDER_NAME);
   const organizer = { name: safeSenderName, email: env.GMAIL_USER };
+  const batchId = crypto.randomUUID();
 
   const resolvedSessions: ResolvedItinerarySession[] = params.sessions.map((session) => {
     const range = resolveWibSessionUtcRange(session.date, session.startTime, session.endTime);
@@ -306,7 +359,7 @@ export async function sendItineraryInvitation(params: {
     };
   });
 
-  const batchSeed = `${params.mode}:${params.subject}:${resolvedSessions
+  const batchSeed = `${batchId}:${params.mode}:${params.subject}:${resolvedSessions
     .map((s) => `${s.date}-${s.startTime}-${s.title}`)
     .join("|")}`;
 
@@ -360,12 +413,60 @@ export async function sendItineraryInvitation(params: {
     html: email.html,
     inlineIcs: combinedIcs,
     icsAttachments,
+    entityRefId: batchId,
   });
 
   return {
+    batchId,
     messageId: sent.messageId,
-    recipientCount: params.recipients.length,
+    accepted: sent.accepted,
+    rejected: sent.rejected,
+    recipientCount: sent.accepted.length,
     sessionCount: resolvedSessions.length,
     attachmentFilenames: icsAttachments.map((a) => a.filename),
   };
+}
+
+export async function sendPinResetOtpEmail(params: {
+  otp: string;
+  requestedAtWibLabel: string;
+  senderName?: string;
+}): Promise<LayeredEmailResult> {
+  const env = getEnv();
+  const safeSenderName = sanitizeSenderDisplayName(params.senderName, env.SENDER_NAME);
+  const email = buildPinResetOtpEmail({
+    otp: params.otp,
+    requestedAtWibLabel: params.requestedAtWibLabel,
+    senderName: safeSenderName,
+  });
+
+  return sendLayeredEmail({
+    fromName: safeSenderName,
+    to: [{ name: safeSenderName, email: env.MY_EMAIL }],
+    subject: email.subject,
+    text: email.text,
+    html: email.html,
+    entityRefId: `pin-otp-${crypto.randomUUID()}`,
+  });
+}
+
+export async function sendPinResetSuccessEmail(params: {
+  resetAtWibLabel: string;
+  senderName?: string;
+}): Promise<LayeredEmailResult> {
+  const env = getEnv();
+  const safeSenderName = sanitizeSenderDisplayName(params.senderName, env.SENDER_NAME);
+  const email = buildPinResetSuccessEmail({
+    resetAtWibLabel: params.resetAtWibLabel,
+    senderName: safeSenderName,
+  });
+
+  return sendLayeredEmail({
+    fromName: safeSenderName,
+    to: [{ name: safeSenderName, email: env.MY_EMAIL }],
+    subject: email.subject,
+    text: email.text,
+    html: email.html,
+    entityRefId: `pin-reset-${crypto.randomUUID()}`,
+  });
 }

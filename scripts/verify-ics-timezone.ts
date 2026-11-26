@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import {
   buildAttendanceReminderEmail,
   buildEscalationEmail,
@@ -12,7 +13,18 @@ import {
   generateIcsCalendar,
 } from "../src/lib/ics";
 import { generateItineraryIntroMessage } from "../src/lib/itinerary-copy";
-import { sanitizeSenderDisplayName } from "../src/lib/security";
+import {
+  createSessionCookieValue,
+  generateNumericOtp6,
+  hashOtpHmac,
+  hashPin,
+  hashPinScrypt,
+  sanitizeSenderDisplayName,
+  verifyOtpHmac,
+  verifyPin,
+  verifyPinScrypt,
+  verifySessionCookieValue,
+} from "../src/lib/security";
 import {
   getTodayWibDate,
   getYesterdayWibDate,
@@ -314,7 +326,81 @@ function runAllAssertions(): void {
   assert.ok(xssItineraryEmail.text.includes("Meeting") === false);
   assert.ok(xssItineraryEmail.text.includes("Baris 1"));
 
-  console.log("SEMUA VERIFIKASI TIMEZONE, ICS DINAMIS, SANITASI SENDER, EMAIL, & SMART DISPATCHER LULUS (13/13 suite).");
+  // 14. Unique batchId menghasilkan UID VEVENT berbeda walau detail acara identik
+  const batchA = crypto.randomUUID();
+  const batchB = crypto.randomUUID();
+  const icsBatchA = unfoldIcs(
+    generateIcsCalendar([
+      {
+        uidSeed: `itinerary:${batchA}:date:Dinner:2026-11-26-19:00-Dinner:stop-1`,
+        summary: "Dinner",
+        date: "2026-11-26",
+        startTime: "19:00",
+        endTime: "21:00",
+        organizer: { name: "Syamsu", email: "bot@example.com" },
+        attendees: [{ email: "nadia@example.com", name: "Nadia" }],
+        alarmMinutes: 30,
+      },
+    ]),
+  );
+  const icsBatchB = unfoldIcs(
+    generateIcsCalendar([
+      {
+        uidSeed: `itinerary:${batchB}:date:Dinner:2026-11-26-19:00-Dinner:stop-1`,
+        summary: "Dinner",
+        date: "2026-11-26",
+        startTime: "19:00",
+        endTime: "21:00",
+        organizer: { name: "Syamsu", email: "bot@example.com" },
+        attendees: [{ email: "nadia@example.com", name: "Nadia" }],
+        alarmMinutes: 30,
+      },
+    ]),
+  );
+  const uidLineA = icsBatchA.split("\r\n").find((l) => l.startsWith("UID:"));
+  const uidLineB = icsBatchB.split("\r\n").find((l) => l.startsWith("UID:"));
+  assert.ok(uidLineA && uidLineB);
+  assert.notEqual(uidLineA, uidLineB);
+
+  // 15. Keamanan PIN: scrypt hashing + fallback APP_PIN_HASH + sessionVersion invalidation + OTP HMAC
+  process.env.SESSION_SECRET ??= "test-session-secret-minimum-32-chars-ok";
+  process.env.HMAC_SECRET ??= "test-hmac-secret-minimum-32-chars-ok";
+  process.env.CRON_SECRET ??= "test-cron-secret-minimum-32-chars-ok";
+  process.env.SENDER_NAME ??= "Pengingat Jadwal";
+  process.env.PARTNER_NAME ??= "Nadia";
+  process.env.APP_PIN_HASH ??= hashPin("1234");
+  process.env.GMAIL_USER ??= "bot@example.com";
+  process.env.GMAIL_APP_PASSWORD ??= "abcd-efgh-ijkl-mnop";
+  process.env.MY_EMAIL ??= "owner@example.com";
+  process.env.PARTNER_EMAIL ??= "partner@example.com";
+  process.env.UPSTASH_REDIS_REST_URL ??= "http://127.0.0.1:8799";
+  process.env.UPSTASH_REDIS_REST_TOKEN ??= "test-token";
+
+  assert.equal(verifyPin("1234"), true);
+  assert.equal(verifyPin("9999"), false);
+
+  const scryptStored = hashPinScrypt("654321");
+  assert.ok(scryptStored.startsWith("scrypt$"));
+  assert.equal(verifyPinScrypt("654321", scryptStored), true);
+  assert.equal(verifyPinScrypt("123456", scryptStored), false);
+
+  const cookieV2 = createSessionCookieValue("v2-abc");
+  assert.equal(verifySessionCookieValue(cookieV2, "v2-abc").valid, true);
+  assert.equal(verifySessionCookieValue(cookieV2, "v3-rotated").valid, false);
+
+  const otp6 = generateNumericOtp6();
+  assert.match(otp6, /^\d{6}$/);
+  const otpSalt = crypto.randomBytes(16).toString("hex");
+  const otpHmac = hashOtpHmac(otp6, otpSalt);
+  assert.equal(verifyOtpHmac(otp6, otpSalt, otpHmac), true);
+  assert.equal(verifyOtpHmac("000000", otpSalt, otpHmac), otp6 === "000000");
+
+  // Simulasi sanitasi input PIN 6 digit (keyboard, paste, numpad)
+  const sanitize6 = (raw: string) => raw.replace(/\D/g, "").slice(0, 6);
+  assert.equal(sanitize6("12a34b56789"), "123456");
+  assert.equal(sanitize6("1234567").length, 6);
+
+  console.log("SEMUA VERIFIKASI TIMEZONE, ICS DINAMIS, SANITASI SENDER, EMAIL, BATCH UID, & KEAMANAN PIN LULUS (15/15 suite).");
 }
 
 runAllAssertions();

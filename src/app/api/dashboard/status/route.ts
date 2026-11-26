@@ -121,6 +121,7 @@ export async function GET(request: Request) {
       partnerName: snapshot.recipient.name,
       partnerEmail: snapshot.recipient.email,
       senderName: snapshot.senderName,
+      pinMigrationRecommended: snapshot.pinMigrationRecommended,
       recipient: snapshot.recipient,
       customMessage: snapshot.customMessage,
       todayOffDay,

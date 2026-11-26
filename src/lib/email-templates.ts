@@ -539,3 +539,107 @@ export function buildItineraryEmail(params: {
     html,
   };
 }
+
+export function buildPinResetOtpEmail(params: {
+  otp: string;
+  requestedAtWibLabel: string;
+  senderName: string;
+}): EmailContent {
+  const safeOtp = escapeHtml(params.otp);
+  const safeTime = escapeHtml(params.requestedAtWibLabel);
+  const subject = `[Keamanan] Kode Pemulihan PIN Dashboard (${params.otp})`;
+
+  const bodyHtml = `
+    <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#334155;">
+      Kami menerima permintaan untuk mereset PIN akses dashboard pada <strong>${safeTime}</strong>.
+    </p>
+    <div style="margin:0 0 18px 0;padding:20px;border-radius:14px;background-color:#F8FAFC;border:1px dashed #CBD5E1;text-align:center;">
+      <p style="margin:0 0 6px 0;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#64748B;">
+        Kode Verifikasi 6 Digit
+      </p>
+      <p style="margin:0;font-family:'SF Mono',Consolas,monospace;font-size:32px;font-weight:800;letter-spacing:0.22em;color:#0F172A;">
+        ${safeOtp}
+      </p>
+      <p style="margin:8px 0 0 0;font-size:12px;color:#64748B;">
+        Berlaku selama <strong>10 menit</strong> (hanya untuk 1 kali penggunaan)
+      </p>
+    </div>
+    <div style="padding:14px 16px;border-radius:12px;background-color:#FFF1F2;border:1px solid #FECDD3;">
+      <p style="margin:0;font-size:13px;line-height:1.55;color:#9F1239;">
+        <strong>Peringatan Keamanan:</strong> Jika bukan kamu yang meminta reset PIN, abaikan email ini. PIN saat ini tetap aman dan tidak berubah.
+      </p>
+    </div>
+  `;
+
+  const html = renderEmailShell({
+    preheader: `Kode pemulihan PIN dashboard: ${params.otp} (berlaku 10 menit).`,
+    badgeText: "KEAMANAN AKUN",
+    heading: "Reset PIN Akses Dashboard",
+    bannerBgFallback: "#1E293B",
+    bannerBgGradient: "linear-gradient(135deg, #1E293B 0%, #4F46E5 100%)",
+    badgeBg: "rgba(255,255,255,0.16)",
+    badgeColor: "#FFFFFF",
+    accentColor: "#4F46E5",
+    bodyHtml,
+    includeCalendarTip: false,
+    senderName: params.senderName,
+  });
+
+  const text = [
+    "Reset PIN Akses Dashboard",
+    `Waktu permintaan: ${params.requestedAtWibLabel}`,
+    "",
+    `Kode Verifikasi 6 Digit: ${params.otp}`,
+    "Kode berlaku selama 10 menit dan hanya dapat dipakai 1 kali.",
+    "",
+    "Jika bukan kamu yang meminta reset PIN, abaikan email ini. PIN saat ini tetap aman.",
+  ].join("\n");
+
+  return { subject, text, html };
+}
+
+export function buildPinResetSuccessEmail(params: {
+  resetAtWibLabel: string;
+  senderName: string;
+}): EmailContent {
+  const safeTime = escapeHtml(params.resetAtWibLabel);
+  const subject = "[Keamanan] PIN Dashboard Berhasil Diperbarui";
+
+  const bodyHtml = `
+    <p style="margin:0 0 14px 0;font-size:15px;line-height:1.6;color:#334155;">
+      PIN akses dashboard baru saja berhasil di-reset menjadi PIN 6 digit baru pada <strong>${safeTime}</strong>.
+    </p>
+    <p style="margin:0 0 16px 0;font-size:14px;line-height:1.6;color:#475569;">
+      Demi keamanan, seluruh sesi login lama di perangkat lain telah otomatis dikeluarkan.
+    </p>
+    <div style="padding:14px 16px;border-radius:12px;background-color:#FFFBEB;border:1px solid #FDE68A;">
+      <p style="margin:0;font-size:13px;line-height:1.55;color:#92400E;">
+        Jika kamu tidak merasa melakukan perubahan ini, segera periksa keamanan akun email dan lakukan reset PIN ulang.
+      </p>
+    </div>
+  `;
+
+  const html = renderEmailShell({
+    preheader: `PIN dashboard berhasil di-reset pada ${params.resetAtWibLabel}.`,
+    badgeText: "NOTIFIKASI KEAMANAN",
+    heading: "PIN Dashboard Berhasil Diperbarui",
+    bannerBgFallback: "#065F46",
+    bannerBgGradient: "linear-gradient(135deg, #065F46 0%, #059669 100%)",
+    badgeBg: "rgba(255,255,255,0.18)",
+    badgeColor: "#FFFFFF",
+    accentColor: "#059669",
+    bodyHtml,
+    includeCalendarTip: false,
+    senderName: params.senderName,
+  });
+
+  const text = [
+    "PIN Dashboard Berhasil Diperbarui",
+    `Waktu: ${params.resetAtWibLabel}`,
+    "",
+    "PIN akses dashboard baru saja berhasil di-reset dan seluruh sesi lama di perangkat lain telah dikeluarkan.",
+    "Jika kamu tidak merasa melakukan perubahan ini, segera lakukan reset PIN ulang.",
+  ].join("\n");
+
+  return { subject, text, html };
+}

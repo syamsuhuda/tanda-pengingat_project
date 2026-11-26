@@ -15,6 +15,7 @@ import {
   getActiveRecipient,
   getActiveSenderName,
   listFriendContacts,
+  touchDashboardVersion,
 } from "@/lib/store";
 import type { RecipientAddress } from "@/lib/types";
 import { sendItinerarySchema } from "@/lib/validators";
@@ -119,15 +120,19 @@ export async function POST(request: Request) {
     const modeSummary = mode === "date" ? "Date Itinerary" : "Acara & Kegiatan";
     await appendActivityLog({
       type: "itinerary_sent",
-      summary: `${modeSummary} [${resolvedCategoryLabel}] "${subject}" (${result.sessionCount} sesi) oleh ${resolvedSenderName} terkirim ke ${result.recipientCount} penerima.`,
+      summary: `${modeSummary} [${resolvedCategoryLabel}] "${subject}" (${result.sessionCount} sesi) oleh ${resolvedSenderName} terkirim ke ${result.accepted.join(", ")}.`,
       result: "success",
     });
+    await touchDashboardVersion();
 
     return jsonOk(
-      `Undangan "${subject}" berhasil dikirim ke ${result.recipientCount} penerima.`,
+      `Undangan "${subject}" berhasil dikirim ke ${result.accepted.join(", ")}.`,
       result,
     );
   } catch (error) {
+    if (error instanceof Error && error.name === "SmtpNoAcceptedRecipientsError") {
+      return jsonError(error.message, "SMTP_DELIVERY_REJECTED", 502);
+    }
     return handleRouteError(error, "Gagal mengirim undangan itinerary.");
   }
 }
