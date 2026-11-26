@@ -3,22 +3,26 @@
 import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 
-type ThemeMode = "light" | "dark";
+type ThemeMode = "dark" | "light";
 
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<ThemeMode>("light");
+  const [theme, setTheme] = useState<ThemeMode>("dark");
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const current = document.documentElement.getAttribute("data-theme");
-    setTheme(current === "dark" ? "dark" : "light");
+    const isDark = document.documentElement.classList.contains("dark");
+    setTheme(isDark ? "dark" : "light");
     setMounted(true);
   }, []);
 
   function toggleTheme() {
     const next: ThemeMode = theme === "dark" ? "light" : "dark";
     setTheme(next);
-    document.documentElement.setAttribute("data-theme", next);
+    if (next === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
     try {
       localStorage.setItem("pj_theme", next);
     } catch {
@@ -38,12 +42,20 @@ export function ThemeToggle() {
       onClick={toggleTheme}
       aria-label={label}
       title={label}
-      className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-3 text-sm font-medium text-[var(--ink)] transition-colors hover:bg-[var(--surface-muted)] active:scale-[0.98]"
+      className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl border border-[var(--border-control)] bg-[var(--surface)] px-3 text-sm font-medium text-[var(--ink)] transition-all duration-200 hover:bg-[var(--surface-muted)] active:scale-[0.96]"
     >
-      {mounted && theme === "dark" ? (
-        <Sun className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+      {mounted && theme === "light" ? (
+        <Moon
+          className="h-4 w-4 transition-transform duration-300"
+          strokeWidth={1.9}
+          aria-hidden="true"
+        />
       ) : (
-        <Moon className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+        <Sun
+          className="h-4 w-4 text-amber-300 transition-transform duration-300"
+          strokeWidth={1.9}
+          aria-hidden="true"
+        />
       )}
     </button>
   );

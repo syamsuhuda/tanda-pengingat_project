@@ -1,20 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import "@fontsource/fraunces/500.css";
-import "@fontsource/fraunces/600.css";
-import "@fontsource/fraunces/700.css";
-import "@fontsource/plus-jakarta-sans/400.css";
-import "@fontsource/plus-jakarta-sans/500.css";
-import "@fontsource/plus-jakarta-sans/600.css";
-import "@fontsource/plus-jakarta-sans/700.css";
-import "@fontsource/ibm-plex-mono/400.css";
-import "@fontsource/ibm-plex-mono/500.css";
-import "@fontsource/ibm-plex-mono/600.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Pengingat Jadwal",
   description:
-    "Sistem pengingat absen harian otomatis WIB dan generator undangan itinerary terintegrasi Gmail & Google Calendar.",
+    "Asisten pengingat absen harian WIB dan pembuat undangan itinerary yang seru, hangat, dan selalu sinkron.",
 };
 
 export const viewport: Viewport = {
@@ -22,14 +12,20 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
+// Terapkan class `dark` secara default sebelum body dirender agar tidak pernah ada kedipan putih (FOUC).
 const THEME_INIT_SCRIPT = `
 (function() {
   try {
     var saved = localStorage.getItem("pj_theme");
-    var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-    var theme = saved === "dark" || saved === "light" ? saved : (prefersDark ? "dark" : "light");
-    document.documentElement.setAttribute("data-theme", theme);
-  } catch (e) {}
+    var root = document.documentElement;
+    if (saved === "light") {
+      root.classList.remove("dark");
+    } else {
+      root.classList.add("dark");
+    }
+  } catch (e) {
+    document.documentElement.classList.add("dark");
+  }
 })();
 `;
 
@@ -39,8 +35,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="id" suppressHydrationWarning>
+    <html lang="id" className="dark" suppressHydrationWarning>
       <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body>{children}</body>

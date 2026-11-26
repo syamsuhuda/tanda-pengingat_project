@@ -32,8 +32,12 @@ function formatMultilineHtml(value: string): string {
 
 function renderEmailShell(params: {
   preheader: string;
-  label: string;
+  badgeText: string;
   heading: string;
+  bannerBgFallback: string;
+  bannerBgGradient: string;
+  badgeBg: string;
+  badgeColor: string;
   accentColor: string;
   bodyHtml: string;
   includeCalendarTip: boolean;
@@ -42,10 +46,10 @@ function renderEmailShell(params: {
   const calendarTipHtml = params.includeCalendarTip
     ? `<tr>
         <td style="padding:16px 24px 0 24px;">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#F4EFE6;border:1px solid #E2DDD5;border-radius:8px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#F5F3FF" style="background-color:#F5F3FF;border:1px solid #DDD6FE;border-radius:14px;">
             <tr>
-              <td style="padding:12px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#57534E;">
-                <strong style="color:#1C1917;">Catatan Google Calendar:</strong> Jika ini pertama kali Anda menerima undangan dari pengirim ini dan jadwal belum otomatis muncul di kalender, klik tombol <strong>"I know the sender"</strong> (Saya mengenal pengirim) di bagian atas email Gmail, atau gunakan tombol <strong>Tambah Manual ke Google Calendar</strong> di atas.
+              <td style="padding:14px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.6;color:#4C1D95;">
+                <strong>Tips Google Calendar:</strong> Kalau ini pertama kali kamu menerima undangan dari pengirim ini dan jadwal belum langsung muncul di kalender, klik tombol <strong>"I know the sender"</strong> di bagian atas email Gmail, atau tekan tombol <strong>Tambah Manual ke Google Calendar</strong> di atas ya!
               </td>
             </tr>
           </table>
@@ -60,36 +64,33 @@ function renderEmailShell(params: {
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <title>${escapeHtml(params.heading)}</title>
 </head>
-<body style="margin:0;padding:0;background-color:#FAF8F4;color:#1C1917;-webkit-text-size-adjust:100%;">
+<body style="margin:0;padding:0;background-color:#F4F2FA;color:#1E1B2E;-webkit-text-size-adjust:100%;">
   <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
     ${escapeHtml(params.preheader)}
   </div>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#FAF8F4;padding:24px 12px;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#F4F2FA" style="background-color:#F4F2FA;padding:24px 12px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background-color:#FFFFFF;border:1px solid #E2DDD5;border-radius:12px;overflow:hidden;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#FFFFFF" style="max-width:600px;background-color:#FFFFFF;border:1px solid #E5E1F2;border-radius:20px;overflow:hidden;">
           <tr>
-            <td style="height:4px;background-color:${params.accentColor};font-size:0;line-height:0;">&nbsp;</td>
-          </tr>
-          <tr>
-            <td style="padding:24px 24px 12px 24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-              <div style="font-size:12px;font-weight:600;color:${params.accentColor};margin-bottom:8px;">
-                ${escapeHtml(params.label)}
+            <td bgcolor="${params.bannerBgFallback}" style="background-color:${params.bannerBgFallback};background-image:${params.bannerBgGradient};padding:26px 24px 22px 24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+              <div style="display:inline-block;padding:5px 12px;border-radius:999px;background-color:${params.badgeBg};color:${params.badgeColor};font-size:12px;font-weight:700;margin-bottom:10px;">
+                ${escapeHtml(params.badgeText)}
               </div>
-              <h1 style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:24px;line-height:1.3;color:#1C1917;font-weight:600;">
+              <h1 style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:24px;line-height:1.3;color:#FFFFFF;font-weight:700;">
                 ${escapeHtml(params.heading)}
               </h1>
             </td>
           </tr>
           <tr>
-            <td style="padding:8px 24px 24px 24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.65;color:#292524;">
+            <td style="padding:22px 24px 24px 24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.68;color:#2D2942;">
               ${params.bodyHtml}
             </td>
           </tr>
           ${calendarTipHtml}
           <tr>
-            <td style="padding:20px 24px 24px 24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.5;color:#78716C;border-top:1px solid #F0ECE4;">
-              Dikirim melalui ${escapeHtml(params.senderName)} (Zona waktu acuan: WIB / Asia/Jakarta).
+            <td style="padding:18px 24px 22px 24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.5;color:#6E6A85;border-top:1px solid #EFEBF8;">
+              Dikirim hangat melalui ${escapeHtml(params.senderName)} (Acuan waktu: WIB / Asia/Jakarta).
             </td>
           </tr>
         </table>
@@ -131,47 +132,73 @@ export function buildAttendanceReminderEmail(params: {
 
   const stageCopy: Record<
     AttendanceStage | "manual",
-    { label: string; subject: string; heading: string; intro: string; accent: string }
+    {
+      badge: string;
+      subject: string;
+      heading: string;
+      intro: string;
+      bannerFallback: string;
+      bannerGradient: string;
+      badgeBg: string;
+      badgeColor: string;
+      accent: string;
+    }
   > = {
     morning: {
-      label: `Pengingat Absen Pagi (${timeLabel})`,
-      subject: `[Absen Pagi] Halo ${recipientName}, pengingat absen ${dateShort}`,
+      badge: `Pengingat Pagi (${timeLabel})`,
+      subject: `Pagi, ${recipientName}! Yuk absen dulu biar hari ini tenang (${dateShort})`,
       heading: `Pagi, ${recipientName}!`,
-      intro: `Pengingat rutin untuk melakukan absen hari ini (${dateLong}). Jika sudah absen, tekan tombol konfirmasi di bawah agar pengingat lanjutan hari ini otomatis dibatalkan.`,
-      accent: "#B4431D",
+      intro: `Semangat menjalani hari ini (${dateLong})! Jangan lupa absen dulu ya. Begitu selesai, klik tombol di bawah biar pengingat sore dan malam hari ini otomatis off.`,
+      bannerFallback: "#E11D48",
+      bannerGradient: "linear-gradient(135deg, #E11D48 0%, #F97316 100%)",
+      badgeBg: "rgba(255,255,255,0.2)",
+      badgeColor: "#FFFFFF",
+      accent: "#E11D48",
     },
     afternoon: {
-      label: `Pengecekan Absen Sore (${timeLabel})`,
-      subject: `[Cek Sore] Halo ${recipientName}, sudah absen hari ini? (${dateShort})`,
-      heading: `Halo ${recipientName}, sudah absen hari ini?`,
-      intro: `Sampai pukul ${timeLabel}, status absen untuk ${dateLong} belum tercatat terkonfirmasi. Jika sudah absen, tekan tombol di bawah supaya peringatan urgent hari ini tidak perlu terkirim.`,
-      accent: "#B45309",
+      badge: `Cek Sore (${timeLabel})`,
+      subject: `Knock knock ${recipientName}! Sore nih, udah sempet absen belum? (${dateShort})`,
+      heading: `Knock knock ${recipientName}! Sore nih, udah sempet absen belum?`,
+      intro: `Sampai pukul ${timeLabel} untuk tanggal ${dateLong}, status absen kamu belum tercatat nih. Kalau sudah absen, tinggal tekan tombol di bawah supaya pengingat malam tidak ikut nyusul.`,
+      bannerFallback: "#D97706",
+      bannerGradient: "linear-gradient(135deg, #F59E0B 0%, #EA580C 100%)",
+      badgeBg: "rgba(255,255,255,0.22)",
+      badgeColor: "#FFFFFF",
+      accent: "#D97706",
     },
     urgent: {
-      label: `Peringatan Urgent (${timeLabel})`,
-      subject: `[URGENT] ${recipientName}, belum konfirmasi absen ${dateShort}`,
-      heading: `Halo ${recipientName}, segera cek absen hari ini`,
-      intro: `Sudah pukul ${timeLabel} dan konfirmasi absen untuk ${dateLong} belum masuk. Mohon segera pastikan absen sudah dilakukan lalu tekan tombol konfirmasi di bawah.`,
-      accent: "#B91C1C",
+      badge: `Pengingat Terakhir Hari Ini (${timeLabel})`,
+      subject: `Hai ${recipientName}, cek absen sebentar yuk sebelum hari selesai (${dateShort})`,
+      heading: `Pengingat terakhir hari ini ya, ${recipientName}`,
+      intro: `Sudah pukul ${timeLabel} dan absen untuk ${dateLong} masih belum dikonfirmasi. Cek sebentar yuk mumpung belum kelewat hari, lalu tekan tombol di bawah kalau sudah beres!`,
+      bannerFallback: "#BE123C",
+      bannerGradient: "linear-gradient(135deg, #BE123C 0%, #9333EA 100%)",
+      badgeBg: "rgba(255,255,255,0.2)",
+      badgeColor: "#FFFFFF",
+      accent: "#BE123C",
     },
     manual: {
-      label: "Pengingat Absen Manual",
-      subject: `[Pengingat Absen] Halo ${recipientName} (${dateShort})`,
-      heading: `Halo ${recipientName}, pengingat absen hari ini`,
-      intro: `Ini adalah pengingat untuk absen tanggal ${dateLong}. Setelah absen selesai, tekan tombol di bawah untuk mencatat konfirmasi.`,
-      accent: "#B4431D",
+      badge: "Pengingat Personal",
+      subject: `Hai ${recipientName}, ada pengingat absen spesial buat kamu (${dateShort})`,
+      heading: `Hai ${recipientName}, jangan lupa absen hari ini ya!`,
+      intro: `Ini pengingat langsung untuk absen tanggal ${dateLong}. Kalau sudah absen, langsung tekan tombol di bawah ya!`,
+      bannerFallback: "#E11D48",
+      bannerGradient: "linear-gradient(135deg, #E11D48 0%, #EC4899 100%)",
+      badgeBg: "rgba(255,255,255,0.2)",
+      badgeColor: "#FFFFFF",
+      accent: "#E11D48",
     },
   };
 
   const copy = stageCopy[params.stage];
   const customMessageHtml = cleanCustomMessage
-    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0;background-color:#FDF2ED;border:1px solid #F2D2C4;border-left:4px solid ${copy.accent};border-radius:8px;">
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#FFFBEB" style="margin:18px 0;background-color:#FFFBEB;border:1px solid #FDE68A;border-radius:16px;">
         <tr>
-          <td style="padding:14px 16px;font-size:14px;line-height:1.6;color:#292524;">
-            <div style="font-size:11px;font-weight:700;letter-spacing:0.03em;color:${copy.accent};margin-bottom:6px;">
-              PESAN KHUSUS UNTUK ${escapeHtml(recipientName.toUpperCase())}
+          <td style="padding:16px 18px;font-size:14px;line-height:1.65;color:#78350F;">
+            <div style="font-size:12px;font-weight:700;color:#B45309;margin-bottom:6px;">
+              Catatan spesial buat ${escapeHtml(recipientName)}
             </div>
-            <div style="font-style:italic;color:#1C1917;">
+            <div style="font-size:15px;font-weight:500;color:#451A03;">
               &ldquo;${formatMultilineHtml(cleanCustomMessage)}&rdquo;
             </div>
           </td>
@@ -186,7 +213,7 @@ export function buildAttendanceReminderEmail(params: {
         dtEndUtc: params.calendarSlot.dtEndUtc,
         description: [
           `Pengingat absen harian untuk ${recipientName} (${dateLong}).`,
-          cleanCustomMessage ? `Pesan khusus: ${cleanCustomMessage}` : "",
+          cleanCustomMessage ? `Catatan spesial: ${cleanCustomMessage}` : "",
           `Tautan konfirmasi: ${params.confirmUrl}`,
         ]
           .filter(Boolean)
@@ -196,11 +223,11 @@ export function buildAttendanceReminderEmail(params: {
 
   const calendarBlockHtml =
     googleCalendarUrl && params.calendarSlot
-      ? `<div style="margin-top:20px;padding-top:16px;border-top:1px solid #EFECE6;">
-          <p style="margin:0 0 10px 0;font-size:13px;color:#57534E;">
-            Slot kalender: <strong style="color:#1C1917;">${escapeHtml(dateLong)}, ${escapeHtml(params.calendarSlot.startTime)} - ${escapeHtml(params.calendarSlot.endTime)} WIB</strong>
+      ? `<div style="margin-top:22px;padding-top:16px;border-top:1px dashed #E2DDF0;">
+          <p style="margin:0 0 10px 0;font-size:13px;color:#5B5772;">
+            Slot kalender: <strong style="color:#1E1B2E;">${escapeHtml(dateLong)}, ${escapeHtml(params.calendarSlot.startTime)} - ${escapeHtml(params.calendarSlot.endTime)} WIB</strong>
           </p>
-          <a href="${escapeHtml(googleCalendarUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:10px 16px;border:1px solid #C8C1B6;border-radius:8px;color:#1C1917;text-decoration:none;font-size:13px;font-weight:600;background-color:#FAF8F4;">
+          <a href="${escapeHtml(googleCalendarUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:10px 18px;border:1px solid #D4CEE8;border-radius:999px;color:#1E1B2E;text-decoration:none;font-size:13px;font-weight:600;background-color:#F8F7FC;">
             Tambah Manual ke Google Calendar
           </a>
         </div>`
@@ -209,17 +236,17 @@ export function buildAttendanceReminderEmail(params: {
   const bodyHtml = `
     <p style="margin:0 0 16px 0;">${escapeHtml(copy.intro)}</p>
     ${customMessageHtml}
-    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:22px 0 16px 0;">
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:22px 0 18px 0;">
       <tr>
-        <td style="border-radius:8px;background-color:${copy.accent};">
-          <a href="${escapeHtml(params.confirmUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:14px 24px;color:#FFFFFF;text-decoration:none;font-weight:600;font-size:15px;">
-            Konfirmasi: Saya Sudah Absen
+        <td bgcolor="${copy.accent}" style="border-radius:999px;background-color:${copy.accent};">
+          <a href="${escapeHtml(params.confirmUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:15px 28px;color:#FFFFFF;text-decoration:none;font-weight:700;font-size:15px;">
+            Yeay, Aku Sudah Absen!
           </a>
         </td>
       </tr>
     </table>
-    <p style="margin:0;font-size:12px;color:#78716C;word-break:break-all;">
-      Jika tombol tidak dapat diklik, buka tautan berikut di browser:<br />
+    <p style="margin:0;font-size:12px;color:#6E6A85;word-break:break-all;">
+      Kalau tombolnya belum bisa diklik, buka tautan ini langsung di browser:<br />
       <a href="${escapeHtml(params.confirmUrl)}" style="color:${copy.accent};">${escapeHtml(params.confirmUrl)}</a>
     </p>
     ${calendarBlockHtml}
@@ -228,9 +255,13 @@ export function buildAttendanceReminderEmail(params: {
   const html = renderEmailShell({
     preheader: cleanCustomMessage
       ? `${copy.heading} ${cleanCustomMessage}`
-      : `${copy.label}: ${dateLong}`,
-    label: copy.label,
+      : `${copy.badge}: ${dateLong}`,
+    badgeText: copy.badge,
     heading: copy.heading,
+    bannerBgFallback: copy.bannerFallback,
+    bannerBgGradient: copy.bannerGradient,
+    badgeBg: copy.badgeBg,
+    badgeColor: copy.badgeColor,
     accentColor: copy.accent,
     bodyHtml,
     includeCalendarTip: Boolean(googleCalendarUrl),
@@ -238,25 +269,27 @@ export function buildAttendanceReminderEmail(params: {
   });
 
   const textLines = [
-    copy.label,
+    copy.badge,
     "",
     copy.heading,
     "",
     copy.intro,
-    ...(cleanCustomMessage ? ["", `Pesan khusus untuk ${recipientName}:`, `"${cleanCustomMessage}"`] : []),
+    ...(cleanCustomMessage
+      ? ["", `Catatan spesial buat ${recipientName}:`, `"${cleanCustomMessage}"`]
+      : []),
     "",
-    `Konfirmasi Saya Sudah Absen: ${params.confirmUrl}`,
+    `Yeay, Aku Sudah Absen: ${params.confirmUrl}`,
     ...(googleCalendarUrl && params.calendarSlot
       ? [
           "",
           `Slot Kalender: ${dateLong}, ${params.calendarSlot.startTime} - ${params.calendarSlot.endTime} WIB`,
           `Tambah Manual ke Google Calendar: ${googleCalendarUrl}`,
           "",
-          'Catatan: Jika undangan kalender belum otomatis muncul di Gmail, klik "I know the sender" di bagian atas email.',
+          'Tips Google Calendar: Jika undangan kalender belum otomatis muncul di Gmail, klik "I know the sender" di bagian atas email.',
         ]
       : []),
     "",
-    `Dikirim melalui ${params.senderName} (WIB / Asia/Jakarta)`,
+    `Dikirim hangat melalui ${params.senderName} (WIB / Asia/Jakarta)`,
   ];
 
   return {
@@ -288,27 +321,31 @@ export function buildEscalationEmail(params: {
       Hingga jadwal eskalasi <strong>${escapeHtml(timeLabel)}</strong> pada <strong>${escapeHtml(dateLong)}</strong>, sistem belum menerima konfirmasi absen dari <strong>${escapeHtml(recipientName)}</strong> (${escapeHtml(params.recipientEmail)}).
     </p>
     <p style="margin:0 0 20px 0;">
-      Email peringatan urgent sudah dikirim ke ${escapeHtml(recipientName)}. Anda dapat menghubungi langsung untuk memastikan absen hari ini tidak terlewat, atau memeriksa status di dashboard.
+      Email pengingat terakhir sudah dikirim ke ${escapeHtml(recipientName)}. Kamu bisa langsung menghubunginya untuk memastikan absen tidak terlewat, atau cek status terbaru di dashboard.
     </p>
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 16px 0;">
       <tr>
-        <td style="border-radius:8px;background-color:#B91C1C;">
-          <a href="${escapeHtml(params.dashboardUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:12px 22px;color:#FFFFFF;text-decoration:none;font-weight:600;font-size:14px;">
+        <td bgcolor="#BE123C" style="border-radius:999px;background-color:#BE123C;">
+          <a href="${escapeHtml(params.dashboardUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:13px 24px;color:#FFFFFF;text-decoration:none;font-weight:700;font-size:14px;">
             Buka Dashboard Pengingat
           </a>
         </td>
       </tr>
     </table>
-    <p style="margin:0;font-size:13px;color:#57534E;">
-      Tautan konfirmasi langsung: <a href="${escapeHtml(params.confirmUrl)}" style="color:#B4431D;">${escapeHtml(params.confirmUrl)}</a>
+    <p style="margin:0;font-size:13px;color:#5B5772;">
+      Tautan konfirmasi langsung: <a href="${escapeHtml(params.confirmUrl)}" style="color:#E11D48;">${escapeHtml(params.confirmUrl)}</a>
     </p>
   `;
 
   const html = renderEmailShell({
     preheader: `Eskalasi ${timeLabel}: Absen ${recipientName} hari ini belum dikonfirmasi (${dateShort})`,
-    label: `Notifikasi Eskalasi Absen (${timeLabel})`,
+    badgeText: `Notifikasi Eskalasi (${timeLabel})`,
     heading,
-    accentColor: "#B91C1C",
+    bannerBgFallback: "#1E1B2E",
+    bannerBgGradient: "linear-gradient(135deg, #1E1B2E 0%, #BE123C 100%)",
+    badgeBg: "rgba(255,255,255,0.18)",
+    badgeColor: "#FFFFFF",
+    accentColor: "#BE123C",
     bodyHtml,
     includeCalendarTip: false,
     senderName: params.senderName,
@@ -320,7 +357,7 @@ export function buildEscalationEmail(params: {
     heading,
     "",
     `Hingga ${timeLabel} (${dateLong}), belum ada konfirmasi absen dari ${recipientName} (${params.recipientEmail}).`,
-    `Email peringatan urgent telah dikirimkan ke ${recipientName}.`,
+    `Email pengingat terakhir telah dikirimkan ke ${recipientName}.`,
     "",
     `Buka Dashboard: ${params.dashboardUrl}`,
     `Tautan Konfirmasi: ${params.confirmUrl}`,
@@ -337,16 +374,27 @@ export function buildItineraryEmail(params: {
   icsMode: IcsBundleMode;
   alarmMinutes: number;
 }): EmailContent {
-  const modeLabel = params.mode === "date" ? "Date Itinerary" : "Undangan Acara & Hangout";
+  const isDate = params.mode === "date";
+  const badgeText = isDate ? "Date Ticket & Itinerary" : "Hangout & Event Plan";
   const countLabel =
     params.sessions.length === 1
-      ? "1 sesi terjadwal"
-      : `${params.sessions.length} sesi dalam rangkaian itinerary`;
+      ? "1 sesi seru"
+      : `${params.sessions.length} sesi dalam rangkaian acara`;
+
+  const introText = isDate
+    ? `Ada rencana date seru yang sudah disiapkan oleh ${params.senderName} (${countLabel}). Yuk cek detail tiap sesinya di bawah dan simpan ke kalender biar tidak lupa!`
+    : `Hai semuanya! ${params.senderName} baru saja membagikan jadwal hangout (${countLabel}). Cek detail waktu & lokasinya di bawah, lalu simpan ke Google Calendar kamu.`;
 
   const attachmentNote =
     params.sessions.length > 1 && params.icsMode === "separate"
-      ? `Terlampir ${params.sessions.length} file kalender (.ics) terpisah untuk setiap sesi, serta pengingat otomatis ${params.alarmMinutes} menit sebelum acara.`
-      : `Terlampir file undangan kalender (.ics) dengan pengingat otomatis ${params.alarmMinutes} menit sebelum acara.`;
+      ? `Terlampir ${params.sessions.length} file kalender (.ics) terpisah untuk masing-masing sesi dengan pengingat ${params.alarmMinutes} menit sebelumnya.`
+      : `Terlampir file kalender (.ics) dengan pengingat otomatis ${params.alarmMinutes} menit sebelum acara dimulai.`;
+
+  const bannerFallback = isDate ? "#E11D48" : "#4F46E5";
+  const bannerGradient = isDate
+    ? "linear-gradient(135deg, #E11D48 0%, #F97316 100%)"
+    : "linear-gradient(135deg, #4F46E5 0%, #0EA5E9 100%)";
+  const accent = isDate ? "#E11D48" : "#4F46E5";
 
   const sessionsHtml = params.sessions
     .map((session, index) => {
@@ -367,39 +415,41 @@ export function buildItineraryEmail(params: {
 
       const locationRow =
         session.locationName || session.mapsUrl
-          ? `<div style="margin-top:8px;font-size:13px;color:#44403C;">
-              <strong>Lokasi:</strong> ${escapeHtml(session.locationName ?? "Lihat peta")}
-              ${
-                session.mapsUrl
-                  ? ` &middot; <a href="${escapeHtml(session.mapsUrl)}" target="_blank" rel="noopener noreferrer" style="color:#B4431D;font-weight:600;text-decoration:underline;">Buka Google Maps</a>`
-                  : ""
-              }
+          ? `<div style="margin-top:8px;font-size:13px;color:#3F3A56;">
+              <strong>Lokasi:</strong> ${escapeHtml(session.locationName ?? "Lihat titik peta")}
             </div>`
           : "";
 
       const descriptionRow = session.description
-        ? `<div style="margin-top:8px;font-size:14px;line-height:1.55;color:#292524;">
+        ? `<div style="margin-top:10px;padding:10px 12px;border-radius:10px;background-color:#FFFFFF;border:1px solid #EAE6F5;font-size:13px;line-height:1.55;color:#2D2942;">
             ${formatMultilineHtml(session.description)}
           </div>`
         : "";
 
-      return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 14px 0;background-color:#FAF8F4;border:1px solid #E2DDD5;border-radius:10px;">
+      const mapsButton = session.mapsUrl
+        ? `<a href="${escapeHtml(session.mapsUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-right:8px;margin-bottom:6px;padding:9px 14px;border-radius:999px;background-color:${accent};color:#FFFFFF;text-decoration:none;font-size:12px;font-weight:700;">
+            Buka Google Maps
+          </a>`
+        : "";
+
+      return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#F8F7FC" style="margin:0 0 14px 0;background-color:#F8F7FC;border:1px solid #E5E1F2;border-radius:16px;">
         <tr>
           <td style="padding:16px 18px;">
-            <div style="font-size:12px;font-weight:600;color:#B4431D;margin-bottom:4px;">
+            <div style="font-size:12px;font-weight:700;color:${accent};margin-bottom:4px;">
               Sesi ${index + 1} &middot; ${escapeHtml(durationLabel)}
             </div>
-            <div style="font-family:Georgia,'Times New Roman',serif;font-size:18px;font-weight:600;color:#1C1917;margin-bottom:6px;">
+            <div style="font-size:18px;font-weight:700;color:#1E1B2E;margin-bottom:6px;">
               ${escapeHtml(session.title)}
             </div>
-            <div style="font-size:13px;color:#44403C;">
+            <div style="font-size:13px;color:#3F3A56;">
               <strong>Waktu:</strong> ${escapeHtml(dateLabel)}, ${escapeHtml(timeRangeLabel)}
             </div>
             ${locationRow}
             ${descriptionRow}
-            <div style="margin-top:12px;">
-              <a href="${escapeHtml(gcalUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:8px 14px;border:1px solid #C8C1B6;border-radius:6px;background-color:#FFFFFF;color:#1C1917;text-decoration:none;font-size:12px;font-weight:600;">
-                Tambah Manual ke Google Calendar
+            <div style="margin-top:14px;">
+              ${mapsButton}
+              <a href="${escapeHtml(gcalUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-bottom:6px;padding:8px 14px;border:1px solid #D4CEE8;border-radius:999px;background-color:#FFFFFF;color:#1E1B2E;text-decoration:none;font-size:12px;font-weight:600;">
+                Simpan ke Kalender
               </a>
             </div>
           </td>
@@ -409,17 +459,20 @@ export function buildItineraryEmail(params: {
     .join("");
 
   const bodyHtml = `
-    <p style="margin:0 0 16px 0;">
-      Berikut detail jadwal yang dibagikan oleh <strong>${escapeHtml(params.senderName)}</strong> (${escapeHtml(countLabel)}). ${escapeHtml(attachmentNote)}
-    </p>
+    <p style="margin:0 0 10px 0;">${escapeHtml(introText)}</p>
+    <p style="margin:0 0 18px 0;font-size:13px;color:#5B5772;">${escapeHtml(attachmentNote)}</p>
     ${sessionsHtml}
   `;
 
   const html = renderEmailShell({
-    preheader: `${modeLabel}: ${params.subject} (${countLabel})`,
-    label: modeLabel,
+    preheader: `${badgeText}: ${params.subject} (${countLabel})`,
+    badgeText,
     heading: params.subject,
-    accentColor: "#B4431D",
+    bannerBgFallback: bannerFallback,
+    bannerBgGradient: bannerGradient,
+    badgeBg: "rgba(255,255,255,0.2)",
+    badgeColor: "#FFFFFF",
+    accentColor: accent,
     bodyHtml,
     includeCalendarTip: true,
     senderName: params.senderName,
@@ -445,17 +498,17 @@ export function buildItineraryEmail(params: {
       ...(session.locationName ? [`Lokasi: ${session.locationName}`] : []),
       ...(session.mapsUrl ? [`Google Maps: ${session.mapsUrl}`] : []),
       ...(session.description ? [`Catatan: ${session.description}`] : []),
-      `Tambah Manual ke Google Calendar: ${gcalUrl}`,
+      `Simpan ke Kalender: ${gcalUrl}`,
     ].join("\n");
   });
 
   const text = [
-    `${modeLabel}: ${params.subject}`,
-    `Pengirim: ${params.senderName} (${countLabel})`,
+    `${badgeText}: ${params.subject}`,
+    introText,
     attachmentNote,
     "",
     ...textSessions.flatMap((block) => [block, ""]),
-    'Catatan Google Calendar: Jika undangan belum otomatis muncul di kalender, klik "I know the sender" di Gmail atau gunakan tautan Tambah Manual di atas.',
+    'Tips Google Calendar: Jika undangan belum otomatis muncul di kalender, klik "I know the sender" di Gmail atau gunakan tautan Simpan ke Kalender di atas.',
   ].join("\n");
 
   return {

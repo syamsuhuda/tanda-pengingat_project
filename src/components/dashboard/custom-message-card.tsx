@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, Check, MessageSquareHeart, Trash2 } from "lucide-react";
+import { AlertCircle, Check, MessageSquareHeart, Sparkles, Trash2 } from "lucide-react";
 import type { CustomMessageConfig, CustomMessageScope } from "@/lib/types";
 
 interface CustomMessageCardProps {
@@ -9,6 +9,12 @@ interface CustomMessageCardProps {
   recipientName: string;
   onChanged: () => Promise<void>;
 }
+
+const PRESET_MESSAGES = [
+  "Semangat jaga hari ini!",
+  "Jangan lupa makan & minum air!",
+  "Hati-hati di jalan ya!",
+] as const;
 
 export function CustomMessageCard({
   customMessage,
@@ -61,7 +67,7 @@ export function CustomMessageCard({
       setIsDirty(false);
       setFeedback({
         type: "success",
-        text: body.message ?? "Pesan khusus pengingat berhasil disimpan.",
+        text: body.message ?? "Pesan khusus berhasil disimpan!",
       });
       await onChanged();
     } catch {
@@ -118,69 +124,79 @@ export function CustomMessageCard({
   return (
     <section
       aria-labelledby="custom-message-heading"
-      className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 sm:p-6"
+      className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-sm sm:p-6"
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h2
             id="custom-message-heading"
-            className="font-display text-xl font-semibold text-[var(--ink)]"
+            className="font-display text-lg font-semibold text-[var(--ink)] sm:text-xl"
           >
-            Pesan Khusus Pengingat
+            Pesan Khusus untuk {recipientName}
           </h2>
-          <p className="mt-1 text-sm text-[var(--ink-muted)]">
-            Sisipkan catatan hangat ke email pengingat otomatis untuk {recipientName}.
+          <p className="mt-0.5 text-xs text-[var(--ink-muted)]">
+            Tampil manis di dalam email pengingat otomatis.
           </p>
         </div>
 
         {customMessage ? (
-          <span className="inline-flex items-center gap-1.5 rounded-md border border-[var(--success-border)] bg-[var(--success-bg)] px-2.5 py-1 text-xs font-semibold text-[var(--success-fg)]">
-            <MessageSquareHeart className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
-            <span>
-              {customMessage.scope === "today_only" ? "Aktif hari ini" : "Aktif terus"}
-            </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--success-border)] bg-[var(--success-bg)] px-2.5 py-1 text-[11px] font-semibold text-[var(--success-fg)]">
+            <MessageSquareHeart className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+            <span>{customMessage.scope === "today_only" ? "Aktif hari ini" : "Aktif terus"}</span>
           </span>
         ) : null}
       </div>
 
-      <form onSubmit={handleSave} className="mt-4 space-y-4">
-        <div>
-          <label
-            htmlFor="custom-message-textarea"
-            className="block text-sm font-semibold text-[var(--ink)]"
+      <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Pilihan cepat pesan">
+        {PRESET_MESSAGES.map((preset) => (
+          <button
+            key={preset}
+            type="button"
+            onClick={() => {
+              setMessageText(preset);
+              setIsDirty(true);
+              if (feedback) setFeedback(null);
+            }}
+            className="inline-flex min-h-[36px] items-center gap-1 rounded-full border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3 py-1 text-xs font-medium text-[var(--ink)] transition-all hover:border-[var(--accent)] hover:bg-[var(--accent-tint)] active:scale-[0.97]"
           >
+            <Sparkles className="h-3 w-3 text-[var(--accent)]" strokeWidth={2} aria-hidden="true" />
+            <span>{preset}</span>
+          </button>
+        ))}
+      </div>
+
+      <form onSubmit={handleSave} className="mt-3 space-y-3">
+        <div>
+          <label htmlFor="custom-message-textarea" className="sr-only">
             Isi pesan pribadi
           </label>
           <textarea
             id="custom-message-textarea"
-            rows={3}
+            rows={2}
             maxLength={500}
             value={messageText}
             onChange={(event) => {
               setMessageText(event.target.value);
               setIsDirty(true);
             }}
-            placeholder="Contoh: Semangat jaga paginya ya, jangan lupa sarapan."
-            className="mt-1.5 w-full rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-3.5 py-2.5 text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
+            placeholder="Tulis pesan penyemangat atau klik chip di atas..."
+            className="w-full rounded-2xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 py-2.5 text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
           />
-          <div className="mt-1 flex justify-end">
-            <span className="font-mono-num text-[11px] text-[var(--ink-muted)]">
-              {messageText.length}/500
-            </span>
+          <div className="mt-1 flex items-center justify-between text-[11px] text-[var(--ink-muted)]">
+            <span>{isDirty ? "Perubahan belum disimpan" : "Tersinkron"}</span>
+            <span className="font-mono-num">{messageText.length}/500</span>
           </div>
         </div>
 
         <fieldset>
-          <legend className="text-sm font-semibold text-[var(--ink)]">
-            Masa berlaku pesan
-          </legend>
-          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <legend className="sr-only">Masa berlaku pesan</legend>
+          <div className="grid grid-cols-2 gap-2">
             <label
               htmlFor="scope-today-only"
-              className={`flex min-h-[46px] items-center gap-2.5 rounded-lg border px-3.5 py-2 text-sm transition-colors ${
+              className={`flex min-h-[44px] items-center justify-center gap-2 rounded-2xl border px-3 text-xs font-semibold transition-all ${
                 scope === "today_only"
                   ? "border-[var(--accent)] bg-[var(--accent-tint)] text-[var(--ink)]"
-                  : "border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--ink-muted)]"
+                  : "border-[var(--border-subtle)] bg-[var(--surface-elevated)] text-[var(--ink-muted)]"
               }`}
             >
               <input
@@ -195,17 +211,15 @@ export function CustomMessageCard({
                 }}
                 className="h-4 w-4 accent-[var(--accent)]"
               />
-              <span className="font-medium text-[var(--ink)]">
-                Hanya untuk hari ini
-              </span>
+              <span>Hanya hari ini</span>
             </label>
 
             <label
               htmlFor="scope-always"
-              className={`flex min-h-[46px] items-center gap-2.5 rounded-lg border px-3.5 py-2 text-sm transition-colors ${
+              className={`flex min-h-[44px] items-center justify-center gap-2 rounded-2xl border px-3 text-xs font-semibold transition-all ${
                 scope === "always"
                   ? "border-[var(--accent)] bg-[var(--accent-tint)] text-[var(--ink)]"
-                  : "border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--ink-muted)]"
+                  : "border-[var(--border-subtle)] bg-[var(--surface-elevated)] text-[var(--ink-muted)]"
               }`}
             >
               <input
@@ -220,9 +234,7 @@ export function CustomMessageCard({
                 }}
                 className="h-4 w-4 accent-[var(--accent)]"
               />
-              <span className="font-medium text-[var(--ink)]">
-                Pakai terus sampai saya ubah
-              </span>
+              <span>Pakai terus</span>
             </label>
           </div>
         </fieldset>
@@ -230,26 +242,26 @@ export function CustomMessageCard({
         {feedback ? (
           <div
             role={feedback.type === "error" ? "alert" : "status"}
-            className={`flex items-start gap-2 rounded-lg border px-3.5 py-2.5 text-sm ${
+            className={`flex items-start gap-2 rounded-2xl border px-3 py-2 text-xs font-medium ${
               feedback.type === "error"
                 ? "border-[var(--danger-border)] bg-[var(--danger-bg)] text-[var(--danger-fg)]"
                 : "border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-fg)]"
             }`}
           >
             {feedback.type === "error" ? (
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.9} aria-hidden="true" />
             ) : (
-              <Check className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+              <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.9} aria-hidden="true" />
             )}
             <span>{feedback.text}</span>
           </div>
         ) : null}
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="submit"
             disabled={saving || clearing}
-            className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent-fg)] transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-60"
+            className="btn-playful-gradient inline-flex min-h-[44px] flex-1 items-center justify-center rounded-2xl px-4 text-sm font-semibold shadow-sm transition-all active:scale-[0.98] disabled:opacity-60 sm:flex-none"
           >
             {saving ? "Menyimpan..." : "Simpan Pesan"}
           </button>
@@ -259,10 +271,10 @@ export function CustomMessageCard({
               type="button"
               disabled={saving || clearing}
               onClick={() => void handleClear()}
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-[var(--danger-border)] bg-[var(--danger-bg)] px-4 text-sm font-semibold text-[var(--danger-fg)] hover:opacity-90 disabled:opacity-50"
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-2xl border border-[var(--danger-border)] bg-[var(--danger-bg)] px-3.5 text-xs font-semibold text-[var(--danger-fg)] transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50"
             >
-              <Trash2 className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-              <span>{clearing ? "Menghapus..." : "Hapus Pesan"}</span>
+              <Trash2 className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden="true" />
+              <span>{clearing ? "Hapus..." : "Hapus"}</span>
             </button>
           ) : null}
         </div>

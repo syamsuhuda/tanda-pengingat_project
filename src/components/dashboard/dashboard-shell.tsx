@@ -32,10 +32,10 @@ interface LiveToastItem {
 function formatRelativeSync(lastSyncedAt: number | null, nowMs: number): string {
   if (!lastSyncedAt) return "Menghubungkan...";
   const diffSec = Math.max(0, Math.floor((nowMs - lastSyncedAt) / 1000));
-  if (diffSec < 5) return "Diperbarui baru saja";
-  if (diffSec < 60) return `Sinkron ${diffSec} dtk lalu`;
+  if (diffSec < 5) return "Baru saja";
+  if (diffSec < 60) return `${diffSec} dtk lalu`;
   const diffMin = Math.floor(diffSec / 60);
-  return `Sinkron ${diffMin} mnt lalu`;
+  return `${diffMin} mnt lalu`;
 }
 
 const CONNECTION_META: Record<
@@ -44,19 +44,19 @@ const CONNECTION_META: Record<
 > = {
   live: {
     label: "Live",
-    dotClass: "bg-emerald-500 motion-safe:animate-pulse",
+    dotClass: "bg-emerald-400 motion-safe:animate-pulse",
     badgeClass:
       "border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-fg)]",
   },
   reconnecting: {
     label: "Menyambung ulang...",
-    dotClass: "bg-amber-500",
+    dotClass: "bg-amber-400",
     badgeClass:
       "border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-fg)]",
   },
   offline: {
     label: "Offline",
-    dotClass: "bg-stone-400",
+    dotClass: "bg-slate-400",
     badgeClass:
       "border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--ink-muted)]",
   },
@@ -160,7 +160,7 @@ export function DashboardShell() {
         setContactGroups(body.data.groups);
       }
     } catch {
-      // Penanganan error kontak ditampilkan langsung di tab itinerary atau modal kontak.
+      // Penanganan error kontak ditampilkan di tab itinerary atau modal kontak.
     }
   }, [router]);
 
@@ -191,17 +191,15 @@ export function DashboardShell() {
 
   return (
     <div className="min-h-dvh bg-[var(--bg)] text-[var(--ink)]">
-      <header className="sticky top-0 z-30 border-b border-[var(--border-subtle)] bg-[var(--surface)]">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+      <header className="sticky top-0 z-30 border-b border-[var(--border-subtle)] bg-[var(--surface)]/92 backdrop-blur-md">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5 sm:px-6">
           <div className="flex min-w-0 items-center gap-2.5">
-            <CalendarClock
-              className="h-5 w-5 shrink-0 text-[var(--accent)]"
-              strokeWidth={1.75}
-              aria-hidden="true"
-            />
+            <div className="btn-playful-gradient flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl shadow-xs">
+              <CalendarClock className="h-5 w-5" strokeWidth={2.1} aria-hidden="true" />
+            </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="font-display truncate text-base font-semibold leading-tight text-[var(--ink)] sm:text-lg">
+                <span className="font-display truncate text-base font-bold leading-tight text-[var(--ink)] sm:text-lg">
                   Pengingat Jadwal
                 </span>
                 <span
@@ -215,21 +213,17 @@ export function DashboardShell() {
                   <span>{connMeta.label}</span>
                 </span>
               </div>
-              {statusData ? (
-                <p className="font-mono-num truncate text-[11px] text-[var(--ink-muted)]">
-                  {statusData.todayFormatted} &middot; {statusData.nowWibTime}
-                  <span className="hidden font-sans md:inline"> &middot; {syncLabel}</span>
-                </p>
-              ) : (
-                <p className="text-[11px] text-[var(--ink-muted)]">Zona waktu WIB &middot; {syncLabel}</p>
-              )}
+              <p className="font-mono-num truncate text-[11px] text-[var(--ink-muted)]">
+                {statusData ? `${statusData.todayFormatted} · ${statusData.nowWibTime}` : "WIB"}
+                <span className="hidden font-sans md:inline"> · Sinkron {syncLabel}</span>
+              </p>
             </div>
           </div>
 
           <nav
             aria-label="Navigasi utama"
             role="tablist"
-            className="hidden items-center gap-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-1 sm:flex"
+            className="hidden items-center gap-1 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-1 sm:flex"
           >
             <button
               type="button"
@@ -238,14 +232,14 @@ export function DashboardShell() {
               aria-selected={activeTab === "attendance"}
               aria-controls="panel-attendance"
               onClick={() => setActiveTab("attendance")}
-              className={`inline-flex min-h-[40px] items-center gap-2 rounded-md px-3.5 text-sm font-semibold transition-colors ${
+              className={`inline-flex min-h-[40px] items-center gap-2 rounded-xl px-3.5 text-sm font-semibold transition-all ${
                 activeTab === "attendance"
                   ? "bg-[var(--surface)] text-[var(--ink)] shadow-xs ring-1 ring-[var(--border-subtle)]"
                   : "text-[var(--ink-muted)] hover:text-[var(--ink)]"
               }`}
             >
-              <BellRing className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-              <span>Pengingat Absen</span>
+              <BellRing className="h-4 w-4 text-[var(--accent)]" strokeWidth={2} aria-hidden="true" />
+              <span>Kontrol Absen</span>
             </button>
 
             <button
@@ -255,29 +249,29 @@ export function DashboardShell() {
               aria-selected={activeTab === "itinerary"}
               aria-controls="panel-itinerary"
               onClick={() => setActiveTab("itinerary")}
-              className={`inline-flex min-h-[40px] items-center gap-2 rounded-md px-3.5 text-sm font-semibold transition-colors ${
+              className={`inline-flex min-h-[40px] items-center gap-2 rounded-xl px-3.5 text-sm font-semibold transition-all ${
                 activeTab === "itinerary"
                   ? "bg-[var(--surface)] text-[var(--ink)] shadow-xs ring-1 ring-[var(--border-subtle)]"
                   : "text-[var(--ink-muted)] hover:text-[var(--ink)]"
               }`}
             >
-              <CalendarPlus className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-              <span>Undangan & Itinerary</span>
+              <CalendarPlus className="h-4 w-4 text-[var(--accent)]" strokeWidth={2} aria-hidden="true" />
+              <span>Undangan &amp; Itinerary</span>
             </button>
           </nav>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <button
               type="button"
               onClick={() => void Promise.all([triggerRefresh(true, true), loadContacts()])}
               disabled={isSyncing || isInitialLoading}
               aria-label="Muat ulang data dashboard"
-              title={`Muat ulang (${syncLabel})`}
-              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-[var(--border-control)] bg-[var(--surface)] text-[var(--ink)] transition-colors hover:bg-[var(--surface-muted)] disabled:opacity-50"
+              title={`Sinkron: ${syncLabel}`}
+              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl border border-[var(--border-control)] bg-[var(--surface)] text-[var(--ink)] transition-all hover:bg-[var(--surface-muted)] active:scale-[0.96] disabled:opacity-50"
             >
               <RefreshCw
-                className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`}
-                strokeWidth={1.75}
+                className={`h-4 w-4 ${isSyncing ? "animate-spin text-[var(--accent)]" : ""}`}
+                strokeWidth={1.9}
                 aria-hidden="true"
               />
             </button>
@@ -289,9 +283,9 @@ export function DashboardShell() {
               onClick={handleLogout}
               disabled={loggingOut}
               aria-label="Keluar dari dashboard"
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-3 text-sm font-semibold text-[var(--ink)] transition-colors hover:bg-[var(--surface-muted)] disabled:opacity-50"
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-2xl border border-[var(--border-control)] bg-[var(--surface)] px-3 text-sm font-semibold text-[var(--ink)] transition-all hover:bg-[var(--surface-muted)] active:scale-[0.96] disabled:opacity-50"
             >
-              <LogOut className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+              <LogOut className="h-4 w-4" strokeWidth={1.9} aria-hidden="true" />
               <span className="hidden md:inline">{loggingOut ? "Keluar..." : "Keluar"}</span>
             </button>
           </div>
@@ -307,11 +301,11 @@ export function DashboardShell() {
             <div
               key={toast.id}
               role="status"
-              className="pointer-events-auto flex items-start gap-2.5 rounded-xl border border-[var(--success-border)] bg-[var(--surface)] px-4 py-3 text-sm font-medium text-[var(--ink)] shadow-lg"
+              className="pointer-events-auto flex items-start gap-2.5 rounded-2xl border border-[var(--success-border)] bg-[var(--surface)] px-4 py-3 text-sm font-medium text-[var(--ink)] shadow-xl"
             >
               <CheckCircle2
                 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--success-fg)]"
-                strokeWidth={1.75}
+                strokeWidth={2}
                 aria-hidden="true"
               />
               <span className="flex-1">{toast.text}</span>
@@ -319,39 +313,39 @@ export function DashboardShell() {
                 type="button"
                 onClick={() => dismissToast(toast.id)}
                 aria-label="Tutup notifikasi"
-                className="-mt-1 -mr-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--ink-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--ink)]"
+                className="-mt-1 -mr-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-[var(--ink-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--ink)]"
               >
-                <X className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                <X className="h-4 w-4" strokeWidth={1.9} aria-hidden="true" />
               </button>
             </div>
           ))}
         </div>
       ) : null}
 
-      <main className="pb-mobile-nav mx-auto max-w-6xl px-4 pt-6 sm:px-6 sm:pt-8">
+      <main className="pb-mobile-nav mx-auto max-w-6xl px-4 pt-5 sm:px-6 sm:pt-6">
         {isInitialLoading && !statusData ? (
           <section
             aria-busy="true"
-            className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] p-8 text-center"
+            className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--surface)] p-10 text-center"
           >
             <RefreshCw
-              className="mx-auto h-6 w-6 animate-spin text-[var(--accent)]"
-              strokeWidth={1.75}
+              className="mx-auto h-7 w-7 animate-spin text-[var(--accent)]"
+              strokeWidth={2}
               aria-hidden="true"
             />
             <p className="mt-3 text-sm font-medium text-[var(--ink)]">
-              Memuat status absen dan jadwal hari ini (WIB)...
+              Menyiapkan dashboard &amp; jadwal hari ini (WIB)...
             </p>
           </section>
         ) : statusError && !statusData ? (
           <section
             role="alert"
-            className="rounded-xl border border-[var(--danger-border)] bg-[var(--surface)] p-6 sm:p-8"
+            className="rounded-3xl border border-[var(--danger-border)] bg-[var(--surface)] p-6 sm:p-8"
           >
             <div className="flex items-start gap-3">
               <AlertCircle
                 className="mt-0.5 h-5 w-5 shrink-0 text-[var(--danger-fg)]"
-                strokeWidth={1.75}
+                strokeWidth={2}
                 aria-hidden="true"
               />
               <div>
@@ -362,9 +356,9 @@ export function DashboardShell() {
                 <button
                   type="button"
                   onClick={() => void triggerRefresh(true, true)}
-                  className="mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent-fg)] hover:bg-[var(--accent-hover)]"
+                  className="btn-playful-gradient mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-2xl px-4 text-sm font-semibold"
                 >
-                  <RefreshCw className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                  <RefreshCw className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
                   <span>Coba Muat Ulang</span>
                 </button>
               </div>
@@ -372,21 +366,21 @@ export function DashboardShell() {
           </section>
         ) : statusData ? (
           <>
-            <div className="mb-4 flex items-center justify-between text-xs text-[var(--ink-muted)] md:hidden">
-              <span>Sinkronisasi otomatis</span>
+            <div className="mb-3 flex items-center justify-between text-[11px] text-[var(--ink-muted)] md:hidden">
+              <span>Sinkronisasi live</span>
               <span className="font-mono-num">{syncLabel}</span>
             </div>
 
             {statusError ? (
               <div
                 role="alert"
-                className="mb-5 flex items-center justify-between gap-3 rounded-lg border border-[var(--warning-border)] bg-[var(--warning-bg)] px-4 py-3 text-sm text-[var(--warning-fg)]"
+                className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-[var(--warning-border)] bg-[var(--warning-bg)] px-4 py-2.5 text-xs font-medium text-[var(--warning-fg)]"
               >
                 <span>{statusError}</span>
                 <button
                   type="button"
                   onClick={() => void triggerRefresh(true, true)}
-                  className="min-h-[36px] shrink-0 rounded-md border border-[var(--warning-border)] px-3 text-xs font-semibold hover:opacity-85"
+                  className="min-h-[34px] shrink-0 rounded-xl border border-[var(--warning-border)] px-3 font-semibold hover:opacity-85"
                 >
                   Coba Sekarang
                 </button>
@@ -433,7 +427,7 @@ export function DashboardShell() {
       <nav
         aria-label="Navigasi ponsel"
         role="tablist"
-        className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-2 border-t border-[var(--border-subtle)] bg-[var(--surface)] shadow-lg sm:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-2 rounded-t-2xl border-t border-[var(--border-subtle)] bg-[var(--surface)]/95 shadow-2xl backdrop-blur-md sm:hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
         <button
@@ -442,14 +436,14 @@ export function DashboardShell() {
           aria-selected={activeTab === "attendance"}
           aria-controls="panel-attendance"
           onClick={() => setActiveTab("attendance")}
-          className={`flex min-h-[58px] flex-col items-center justify-center gap-1 px-2 text-xs font-semibold transition-colors ${
+          className={`flex min-h-[60px] flex-col items-center justify-center gap-1 px-2 text-xs font-semibold transition-colors ${
             activeTab === "attendance"
-              ? "border-t-2 border-[var(--accent)] text-[var(--accent)]"
-              : "border-t-2 border-transparent text-[var(--ink-muted)]"
+              ? "text-[var(--accent)]"
+              : "text-[var(--ink-muted)]"
           }`}
         >
-          <BellRing className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
-          <span>Pengingat Absen</span>
+          <BellRing className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
+          <span>Kontrol Absen</span>
         </button>
 
         <button
@@ -458,13 +452,13 @@ export function DashboardShell() {
           aria-selected={activeTab === "itinerary"}
           aria-controls="panel-itinerary"
           onClick={() => setActiveTab("itinerary")}
-          className={`flex min-h-[58px] flex-col items-center justify-center gap-1 px-2 text-xs font-semibold transition-colors ${
+          className={`flex min-h-[60px] flex-col items-center justify-center gap-1 px-2 text-xs font-semibold transition-colors ${
             activeTab === "itinerary"
-              ? "border-t-2 border-[var(--accent)] text-[var(--accent)]"
-              : "border-t-2 border-transparent text-[var(--ink-muted)]"
+              ? "text-[var(--accent)]"
+              : "text-[var(--ink-muted)]"
           }`}
         >
-          <CalendarPlus className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
+          <CalendarPlus className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
           <span>Undangan</span>
         </button>
       </nav>

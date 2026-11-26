@@ -317,44 +317,44 @@ export function ItineraryTab({
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-1">
-        <h1 className="font-display text-2xl font-semibold tracking-tight text-[var(--ink)] sm:text-3xl">
-          Generator Undangan Itinerary & Acara
+        <h1 className="font-display text-2xl font-bold tracking-tight text-[var(--ink)] sm:text-3xl">
+          Buat Undangan &amp; Itinerary Seru
         </h1>
         <p className="text-sm text-[var(--ink-muted)]">
-          Susun satu acara atau rangkaian multi-sesi WIB dan kirim langsung sebagai undangan kalender Google (.ics).
+          Susun rencana kencan atau hangout bareng teman, lalu kirim langsung sebagai tiket kalender Google (.ics).
         </p>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-start">
-        <form onSubmit={handleSubmit} className="space-y-6 lg:col-span-7" noValidate>
+        <form onSubmit={handleSubmit} className="space-y-5 lg:col-span-7" noValidate>
           <section
             aria-labelledby="recipient-mode-heading"
-            className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 sm:p-6"
+            className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-sm sm:p-6"
           >
             <h2
               id="recipient-mode-heading"
               className="font-display text-xl font-semibold text-[var(--ink)]"
             >
-              Penerima Undangan
+              Mau Kirim ke Siapa?
             </h2>
 
             <div
               role="radiogroup"
               aria-label="Mode penerima undangan"
-              className="mt-3 grid grid-cols-1 gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-1 sm:grid-cols-2"
+              className="mt-3 grid grid-cols-1 gap-2 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-1.5 sm:grid-cols-2"
             >
               <button
                 type="button"
                 role="radio"
                 aria-checked={mode === "date"}
                 onClick={() => setMode("date")}
-                className={`inline-flex min-h-[44px] items-center justify-center gap-2 rounded-md px-3.5 text-sm font-semibold transition-colors ${
+                className={`inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-3.5 text-sm font-semibold transition-all ${
                   mode === "date"
                     ? "bg-[var(--surface)] text-[var(--ink)] shadow-xs ring-1 ring-[var(--border-subtle)]"
                     : "text-[var(--ink-muted)] hover:text-[var(--ink)]"
                 }`}
               >
-                <Heart className="h-4 w-4 text-[var(--accent)]" strokeWidth={1.75} aria-hidden="true" />
+                <Heart className="h-4 w-4 text-[var(--accent)]" strokeWidth={2} aria-hidden="true" />
                 <span>Date Itinerary</span>
               </button>
 
@@ -363,27 +363,27 @@ export function ItineraryTab({
                 role="radio"
                 aria-checked={mode === "friends"}
                 onClick={() => setMode("friends")}
-                className={`inline-flex min-h-[44px] items-center justify-center gap-2 rounded-md px-3.5 text-sm font-semibold transition-colors ${
+                className={`inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-3.5 text-sm font-semibold transition-all ${
                   mode === "friends"
                     ? "bg-[var(--surface)] text-[var(--ink)] shadow-xs ring-1 ring-[var(--border-subtle)]"
                     : "text-[var(--ink-muted)] hover:text-[var(--ink)]"
                 }`}
               >
-                <Users className="h-4 w-4 text-[var(--accent)]" strokeWidth={1.75} aria-hidden="true" />
-                <span>Acara / Hangout Teman</span>
+                <Users className="h-4 w-4 text-[var(--accent)]" strokeWidth={2} aria-hidden="true" />
+                <span>Hangout Teman</span>
               </button>
             </div>
 
             {mode === "date" ? (
-              <div className="mt-4 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-4">
-                <div className="inline-flex max-w-full items-center gap-2 rounded-md border border-[var(--border-control)] bg-[var(--surface)] px-3 py-2 text-sm font-semibold text-[var(--ink)]">
-                  <Lock className="h-4 w-4 shrink-0 text-[var(--accent)]" strokeWidth={1.75} aria-hidden="true" />
+              <div className="mt-4 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-4">
+                <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-[var(--border-control)] bg-[var(--surface)] px-3.5 py-2 text-sm font-semibold text-[var(--ink)]">
+                  <Lock className="h-4 w-4 shrink-0 text-[var(--accent)]" strokeWidth={2} aria-hidden="true" />
                   <span className="truncate">
                     {partnerName} ({partnerEmail})
                   </span>
                 </div>
                 <p className="mt-2 text-xs text-[var(--ink-muted)]">
-                  Mode Date Itinerary mengunci penerima secara otomatis ke email pasangan di sisi server.
+                  Otomatis tersinkron dengan Penerima Aktif di Tab Kontrol Absen.
                 </p>
               </div>
             ) : (
@@ -562,7 +562,7 @@ export function ItineraryTab({
 
           <section
             aria-labelledby="general-options-heading"
-            className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 sm:p-6"
+            className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-sm sm:p-6"
           >
             <h2
               id="general-options-heading"
@@ -587,7 +587,7 @@ export function ItineraryTab({
                   value={subject}
                   onChange={(event) => setSubject(event.target.value)}
                   placeholder="Contoh: Rencana Akhir Pekan di Bandung"
-                  className="mt-1.5 min-h-[44px] w-full rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-3.5 text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
+                  className="mt-1.5 min-h-[44px] w-full rounded-2xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
                 />
               </div>
 
@@ -605,7 +605,7 @@ export function ItineraryTab({
                     onChange={(event) =>
                       setAlarmMinutes(Number(event.target.value) as AlarmMinutes)
                     }
-                    className="mt-1.5 min-h-[44px] w-full rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)]"
+                    className="mt-1.5 min-h-[44px] w-full rounded-2xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3 text-sm text-[var(--ink)]"
                   >
                     <option value={15}>15 menit sebelum acara</option>
                     <option value={30}>30 menit sebelum acara</option>
@@ -627,7 +627,7 @@ export function ItineraryTab({
                       onChange={(event) =>
                         setIcsMode(event.target.value as IcsBundleMode)
                       }
-                      className="mt-1.5 min-h-[44px] w-full rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)]"
+                      className="mt-1.5 min-h-[44px] w-full rounded-2xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3 text-sm text-[var(--ink)]"
                     >
                       <option value="combined">1 file .ics gabungan</option>
                       <option value="separate">File .ics terpisah per sesi</option>
@@ -649,21 +649,30 @@ export function ItineraryTab({
               <span className="text-xs text-[var(--ink-muted)]">Waktu dalam WIB</span>
             </div>
 
-            {sessions.map((session, index) => {
-              const crossesMidnight =
-                isValidHmTime(session.startTime) &&
-                isValidHmTime(session.endTime) &&
-                session.endTime < session.startTime;
-              const sameTimeError =
-                isValidHmTime(session.startTime) &&
-                isValidHmTime(session.endTime) &&
-                session.endTime === session.startTime;
+            <div className="space-y-4">
+              {sessions.map((session, index) => {
+                const crossesMidnight =
+                  isValidHmTime(session.startTime) &&
+                  isValidHmTime(session.endTime) &&
+                  session.endTime < session.startTime;
+                const sameTimeError =
+                  isValidHmTime(session.startTime) &&
+                  isValidHmTime(session.endTime) &&
+                  session.endTime === session.startTime;
 
-              return (
-                <article
-                  key={session.draftId}
-                  className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5"
-                >
+                return (
+                  <div
+                    key={session.draftId}
+                    className="relative pl-8 before:absolute before:top-8 before:bottom-[-16px] before:left-[13px] before:w-0.5 before:bg-[var(--border-subtle)] last:before:hidden"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="font-mono-num btn-playful-gradient absolute top-5 left-0 inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold shadow-xs"
+                    >
+                      {index + 1}
+                    </span>
+
+                    <article className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-sm">
                   <div className="flex items-center justify-between gap-2 border-b border-[var(--border-subtle)] pb-3">
                     <h3 className="font-mono-num text-sm font-semibold text-[var(--accent)]">
                       Sesi {index + 1}
@@ -854,21 +863,23 @@ export function ItineraryTab({
                           updateSession(session.draftId, { description: event.target.value })
                         }
                         placeholder="Dress code, titik kumpul, atau catatan parkir..."
-                        className="mt-1.5 w-full rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-3.5 py-2 text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
+                        className="mt-1.5 w-full rounded-2xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 py-2 text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
                       />
                     </div>
                   </div>
-                </article>
-              );
-            })}
+                  </article>
+                  </div>
+                );
+              })}
+            </div>
 
             <button
               type="button"
               onClick={addNextSession}
               disabled={sessions.length >= 15}
-              className="inline-flex min-h-[46px] w-full items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--border-control)] bg-[var(--surface)] px-4 text-sm font-semibold text-[var(--ink)] transition-colors hover:bg-[var(--surface-muted)] disabled:opacity-50"
+              className="inline-flex min-h-[46px] w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-[var(--border-control)] bg-[var(--surface)] px-4 text-sm font-semibold text-[var(--ink)] transition-all hover:bg-[var(--surface-elevated)] active:scale-[0.99] disabled:opacity-50"
             >
-              <Plus className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+              <Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
               <span>Tambah Sesi Berikutnya</span>
             </button>
           </section>
@@ -876,16 +887,16 @@ export function ItineraryTab({
           {feedback ? (
             <div
               role={feedback.type === "error" ? "alert" : "status"}
-              className={`flex items-start gap-2.5 rounded-lg border px-4 py-3 text-sm ${
+              className={`flex items-start gap-2.5 rounded-2xl border px-4 py-3 text-sm ${
                 feedback.type === "error"
                   ? "border-[var(--danger-border)] bg-[var(--danger-bg)] text-[var(--danger-fg)]"
                   : "border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-fg)]"
               }`}
             >
               {feedback.type === "error" ? (
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.9} aria-hidden="true" />
               ) : (
-                <Check className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                <Check className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.9} aria-hidden="true" />
               )}
               <span>{feedback.text}</span>
             </div>
@@ -894,9 +905,9 @@ export function ItineraryTab({
           <button
             type="submit"
             disabled={submitting || exceedsRecipientLimit}
-            className="inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-6 text-sm font-semibold text-[var(--accent-fg)] transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-60"
+            className="btn-playful-gradient inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-full px-6 text-sm font-bold shadow-md transition-all active:scale-[0.98] disabled:opacity-60"
           >
-            <Send className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+            <Send className="h-4 w-4" strokeWidth={2.1} aria-hidden="true" />
             <span>
               {submitting
                 ? "Mengirim Undangan & Kalender..."

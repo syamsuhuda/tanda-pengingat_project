@@ -18,6 +18,7 @@ export function OffDaysCard({
   upcomingOffDays,
   onChanged,
 }: OffDaysCardProps) {
+  const [formOpen, setFormOpen] = useState(false);
   const [dateInput, setDateInput] = useState(tomorrowWib);
   const [noteInput, setNoteInput] = useState("");
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -26,11 +27,14 @@ export function OffDaysCard({
     text: string;
   } | null>(null);
 
-  const isTodayOff = upcomingOffDays.some((item) => item.date === todayWib);
-  const isTomorrowOff = upcomingOffDays.some((item) => item.date === tomorrowWib);
+  async function addCustomDate(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!dateInput) {
+      setFeedback({ type: "error", text: "Pilih tanggal libur terlebih dahulu." });
+      return;
+    }
 
-  async function addDates(dates: string[], note?: string, actionKey = "add") {
-    setBusyKey(actionKey);
+    setBusyKey("custom");
     setFeedback(null);
 
     try {
@@ -38,8 +42,8 @@ export function OffDaysCard({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          dates,
-          note: note?.trim() || undefined,
+          dates: [dateInput],
+          note: noteInput.trim() || undefined,
         }),
       });
 
@@ -52,12 +56,11 @@ export function OffDaysCard({
         return;
       }
 
-      if (actionKey === "custom") {
-        setNoteInput("");
-      }
+      setNoteInput("");
+      setFormOpen(false);
       setFeedback({
         type: "success",
-        text: body.message ?? "Tanggal libur berhasil disimpan.",
+        text: body.message ?? "Tanggal libur ditambahkan!",
       });
       await onChanged();
     } catch {
@@ -70,8 +73,8 @@ export function OffDaysCard({
     }
   }
 
-  async function removeDate(dateWib: string, actionKey = dateWib) {
-    setBusyKey(actionKey);
+  async function removeDate(dateWib: string) {
+    setBusyKey(dateWib);
     setFeedback(null);
 
     try {
@@ -104,198 +107,144 @@ export function OffDaysCard({
     }
   }
 
-  function handleCustomSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!dateInput) {
-      setFeedback({ type: "error", text: "Pilih tanggal libur terlebih dahulu." });
-      return;
-    }
-    void addDates([dateInput], noteInput, "custom");
-  }
-
   return (
     <section
       aria-labelledby="off-days-heading"
-      className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 sm:p-6"
+      className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-sm sm:p-6"
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <h2
             id="off-days-heading"
-            className="font-display text-xl font-semibold text-[var(--ink)]"
+            className="font-display text-lg font-semibold text-[var(--ink)] sm:text-xl"
           >
-            Jadwal Libur Fleksibel
+            Jadwal Libur Shift
           </h2>
           <p className="mt-0.5 text-xs text-[var(--ink-muted)]">
-            Bot otomatis melewati seluruh pengingat pada tanggal libur shift / off-day.
+            {upcomingOffDays.length === 0
+              ? "Belum ada off-day terjadwal."
+              : `${upcomingOffDays.length} tanggal libur mendatang.`}
           </p>
         </div>
-        <CalendarOff
-          className="h-5 w-5 shrink-0 text-[var(--accent)]"
-          strokeWidth={1.75}
-          aria-hidden="true"
-        />
-      </div>
-
-      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <button
-          type="button"
-          disabled={busyKey !== null}
-          onClick={() =>
-            isTodayOff
-              ? void removeDate(todayWib, "quick-today")
-              : void addDates([todayWib], "Libur hari ini", "quick-today")
-          }
-          className={`inline-flex min-h-[46px] items-center justify-center gap-2 rounded-lg border px-3 text-xs font-semibold transition-colors disabled:opacity-50 ${
-            isTodayOff
-              ? "border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-fg)]"
-              : "border-[var(--border-control)] bg-[var(--surface)] text-[var(--ink)] hover:bg-[var(--surface-muted)]"
-          }`}
-        >
-          <CalendarOff className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-          <span>
-            {busyKey === "quick-today"
-              ? "Menyimpan..."
-              : isTodayOff
-                ? "Batalkan Libur Hari Ini"
-                : "Liburkan Hari Ini"}
-          </span>
-        </button>
 
         <button
           type="button"
-          disabled={busyKey !== null}
-          onClick={() =>
-            isTomorrowOff
-              ? void removeDate(tomorrowWib, "quick-tomorrow")
-              : void addDates([tomorrowWib], "Libur besok", "quick-tomorrow")
-          }
-          className={`inline-flex min-h-[46px] items-center justify-center gap-2 rounded-lg border px-3 text-xs font-semibold transition-colors disabled:opacity-50 ${
-            isTomorrowOff
-              ? "border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-fg)]"
-              : "border-[var(--border-control)] bg-[var(--surface)] text-[var(--ink)] hover:bg-[var(--surface-muted)]"
-          }`}
+          onClick={() => {
+            setFormOpen((prev) => !prev);
+            setFeedback(null);
+          }}
+          aria-expanded={formOpen}
+          className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-2xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-xs font-semibold text-[var(--ink)] transition-all hover:bg-[var(--surface-muted)] active:scale-[0.97]"
         >
-          <CalendarOff className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-          <span>
-            {busyKey === "quick-tomorrow"
-              ? "Menyimpan..."
-              : isTomorrowOff
-                ? "Batalkan Libur Besok"
-                : "Liburkan Besok"}
-          </span>
+          <Plus
+            className={`h-4 w-4 transition-transform ${formOpen ? "rotate-45" : ""}`}
+            strokeWidth={2}
+            aria-hidden="true"
+          />
+          <span>{formOpen ? "Tutup" : "Tambah Tanggal"}</span>
         </button>
       </div>
 
-      <form onSubmit={handleCustomSubmit} className="mt-4 space-y-3 border-t border-[var(--border-subtle)] pt-4">
-        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-          <div>
-            <label
-              htmlFor="off-day-date"
-              className="block text-xs font-semibold text-[var(--ink)]"
-            >
-              Tanggal Libur (WIB)
-            </label>
-            <input
-              id="off-day-date"
-              type="date"
-              min={todayWib}
-              required
-              value={dateInput}
-              onChange={(event) => setDateInput(event.target.value)}
-              className="font-mono-num mt-1 min-h-[44px] w-full rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)]"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="off-day-note"
-              className="block text-xs font-semibold text-[var(--ink)]"
-            >
-              Catatan (opsional)
-            </label>
-            <input
-              id="off-day-note"
-              type="text"
-              maxLength={160}
-              value={noteInput}
-              onChange={(event) => setNoteInput(event.target.value)}
-              placeholder="Libur shift, Lepas jaga malam"
-              className="mt-1 min-h-[44px] w-full rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
-            />
-          </div>
-        </div>
-
-        <button
-          type="submit"
-          disabled={busyKey !== null}
-          className="inline-flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--border-control)] bg-[var(--surface-muted)] px-4 text-sm font-semibold text-[var(--ink)] transition-colors hover:bg-[var(--bg)] disabled:opacity-50"
+      {formOpen ? (
+        <form
+          onSubmit={addCustomDate}
+          className="mt-4 space-y-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-3.5"
         >
-          <Plus className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-          <span>{busyKey === "custom" ? "Menambahkan..." : "Tambah Tanggal Libur"}</span>
-        </button>
-      </form>
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            <div>
+              <label
+                htmlFor="off-day-date"
+                className="block text-xs font-semibold text-[var(--ink)]"
+              >
+                Tanggal (WIB)
+              </label>
+              <input
+                id="off-day-date"
+                type="date"
+                min={todayWib}
+                required
+                value={dateInput}
+                onChange={(event) => setDateInput(event.target.value)}
+                className="font-mono-num mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)]"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="off-day-note"
+                className="block text-xs font-semibold text-[var(--ink)]"
+              >
+                Alasan / Catatan
+              </label>
+              <input
+                id="off-day-note"
+                type="text"
+                maxLength={160}
+                value={noteInput}
+                onChange={(event) => setNoteInput(event.target.value)}
+                placeholder="Libur shift, Lepas jaga"
+                className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={busyKey !== null}
+            className="btn-playful-gradient inline-flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-xl px-4 text-xs font-semibold shadow-sm transition-all active:scale-[0.98] disabled:opacity-50"
+          >
+            <CalendarOff className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+            <span>{busyKey === "custom" ? "Menambahkan..." : "Simpan Tanggal Libur"}</span>
+          </button>
+        </form>
+      ) : null}
 
       {feedback ? (
         <div
           role={feedback.type === "error" ? "alert" : "status"}
-          className={`mt-3 flex items-start gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${
+          className={`mt-3 flex items-start gap-2 rounded-2xl border px-3 py-2 text-xs font-medium ${
             feedback.type === "error"
               ? "border-[var(--danger-border)] bg-[var(--danger-bg)] text-[var(--danger-fg)]"
               : "border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-fg)]"
           }`}
         >
           {feedback.type === "error" ? (
-            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.9} aria-hidden="true" />
           ) : (
-            <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+            <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.9} aria-hidden="true" />
           )}
           <span>{feedback.text}</span>
         </div>
       ) : null}
 
-      <div className="mt-4 border-t border-[var(--border-subtle)] pt-4">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-xs font-semibold text-[var(--ink-muted)]">
-            Tanggal Libur Mendatang
-          </h3>
-          <span className="font-mono-num text-xs text-[var(--ink-muted)]">
-            {upcomingOffDays.length} hari
-          </span>
-        </div>
-
+      <div className="mt-4">
         {upcomingOffDays.length === 0 ? (
-          <p className="mt-2 rounded-lg border border-dashed border-[var(--border-subtle)] bg-[var(--surface-muted)] px-3.5 py-3 text-xs text-[var(--ink-muted)]">
-            Belum ada tanggal libur terjadwal. Gunakan tombol cepat di atas atau tambah tanggal shift libur.
+          <p className="rounded-2xl border border-dashed border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-4 py-3 text-xs text-[var(--ink-muted)]">
+            Gunakan tombol cepat di Hero Card untuk liburkan hari ini/besok, atau klik <strong>+ Tambah Tanggal</strong>.
           </p>
         ) : (
-          <ul className="mt-2.5 space-y-2">
+          <div className="flex flex-wrap gap-2">
             {upcomingOffDays.map((item) => (
-              <li
+              <div
                 key={item.date}
-                className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg)] py-1.5 pr-1.5 pl-3 text-sm"
+                className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[var(--off-border)] bg-[var(--off-bg)] py-1 pr-1.5 pl-3 text-xs font-semibold text-[var(--off-fg)]"
               >
-                <div className="min-w-0">
-                  <span className="font-semibold text-[var(--ink)]">
-                    {formatWibDateCompactIndonesian(item.date)}
-                  </span>
-                  {item.note ? (
-                    <span className="text-[var(--ink-muted)]"> &middot; {item.note}</span>
-                  ) : null}
-                </div>
-
+                <span className="truncate">
+                  {formatWibDateCompactIndonesian(item.date)}
+                  {item.note ? ` · ${item.note}` : ""}
+                </span>
                 <button
                   type="button"
                   disabled={busyKey !== null}
                   onClick={() => void removeDate(item.date)}
                   aria-label={`Hapus libur ${formatWibDateCompactIndonesian(item.date)}`}
-                  className="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md text-[var(--ink-muted)] transition-colors hover:bg-[var(--danger-bg)] hover:text-[var(--danger-fg)] disabled:opacity-40"
+                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-black/15 dark:hover:bg-white/15 disabled:opacity-40"
                 >
-                  <X className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                  <X className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden="true" />
                 </button>
-              </li>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </div>
     </section>

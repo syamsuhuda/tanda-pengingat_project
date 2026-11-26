@@ -163,7 +163,7 @@ export function ContactsModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-0 sm:items-center sm:p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/65 p-0 backdrop-blur-xs sm:items-center sm:p-4"
       role="presentation"
       onClick={(event) => {
         if (event.target === event.currentTarget) {
@@ -175,7 +175,7 @@ export function ContactsModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="contacts-modal-title"
-        className="flex max-h-[90dvh] w-full max-w-2xl flex-col rounded-t-xl border border-[var(--border-subtle)] bg-[var(--surface)] shadow-xl sm:rounded-xl"
+        className="flex max-h-[90dvh] w-full max-w-2xl flex-col rounded-t-3xl border border-[var(--border-subtle)] bg-[var(--surface)] shadow-2xl sm:rounded-3xl"
       >
         <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-5 py-4">
           <div>
@@ -308,11 +308,10 @@ export function ContactsModal({
           {feedback ? (
             <div
               role={feedback.type === "error" ? "alert" : "status"}
-              className={`flex items-start gap-2 rounded-lg border px-3.5 py-2.5 text-sm ${
-                feedback.type === "error"
+              className={`flex items-start gap-2 rounded-lg border px-3.5 py-2.5 text-sm ${feedback.type === "error"
                   ? "border-[var(--danger-border)] bg-[var(--danger-bg)] text-[var(--danger-fg)]"
                   : "border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-fg)]"
-              }`}
+                }`}
             >
               {feedback.type === "error" ? (
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
