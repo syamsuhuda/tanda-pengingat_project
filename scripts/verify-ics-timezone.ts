@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
 import {
+  buildAttendanceReminderEmail,
+  buildEscalationEmail,
+} from "../src/lib/email-templates";
+import {
+  buildAttendanceCalendarSlot,
   buildGoogleCalendarTemplateUrl,
   escapeIcsText,
   foldIcsLine,
@@ -8,7 +13,9 @@ import {
 import {
   getTodayWibDate,
   getYesterdayWibDate,
+  hmTimeToMinutes,
   isWithinAttendanceConfirmWindow,
+  resolveDueAutoStage,
   resolveWibSessionUtcRange,
   shiftYmdDate,
 } from "../src/lib/timezone";
@@ -169,7 +176,74 @@ function runAllAssertions(): void {
   assert.ok(gcalUrl.includes("dates=20261126T020000Z%2F20261126T023000Z"));
   assert.ok(gcalUrl.includes("ctz=Asia%2FJakarta"));
 
-  console.log("SEMUA VERIFIKASI TIMEZONE WIB->UTC & RFC 5545 ICS LULUS (8/8 suite).");
+  // 9. Personalisasi nama penerima & proteksi XSS pesan khusus di template email
+  const personalizedEmail = buildAttendanceReminderEmail({
+    stage: "morning",
+    dateWib: "2026-11-26",
+    recipientName: "Nadia",
+    senderName: "Pengingat Jadwal",
+    confirmUrl: "https://example.com/confirm?date=2026-11-26&token=abc",
+    customMessage: "Semangat jaga pagi <script>alert(1)</script>\nJangan lupa sarapan!",
+  });
+  assert.ok(personalizedEmail.html.includes("Pagi, Nadia!"));
+  assert.ok(personalizedEmail.html.includes("&lt;script&gt;alert(1)&lt;/script&gt;"));
+  assert.equal(personalizedEmail.html.includes("<script>alert(1)</script>"), false);
+  assert.ok(personalizedEmail.text.includes("Semangat jaga pagi"));
+
+  const escalationEmail = buildEscalationEmail({
+    dateWib: "2026-11-26",
+    recipientName: "Nadia",
+    recipientEmail: "nadia@example.com",
+    senderName: "Pengingat Jadwal",
+    dashboardUrl: "https://example.com",
+    confirmUrl: "https://example.com/confirm?date=2026-11-26&token=abc",
+  });
+  assert.ok(escalationEmail.subject.includes("Absen Nadia hari ini belum dikonfirmasi"));
+  assert.ok(escalationEmail.html.includes("Absen Nadia hari ini belum dikonfirmasi"));
+
+  // 10. Slot .ics absen pagi dinamis (mengikuti schedule.morning.time + 30 menit, termasuk lintas tengah malam)
+  const dynamicMorningSlot = buildAttendanceCalendarSlot("2026-11-26", "08:00", 30);
+  assert.equal(dynamicMorningSlot.startTime, "08:00");
+  assert.equal(dynamicMorningSlot.endTime, "08:30");
+  assert.equal(dynamicMorningSlot.dtStartUtc, "20261126T010000Z");
+  assert.equal(dynamicMorningSlot.dtEndUtc, "20261126T013000Z");
+
+  const lateSlotCrossMidnight = buildAttendanceCalendarSlot("2026-12-31", "23:30", 30);
+  assert.equal(lateSlotCrossMidnight.endTime, "00:00");
+  assert.equal(lateSlotCrossMidnight.dtStartUtc, "20261231T163000Z");
+  assert.equal(lateSlotCrossMidnight.dtEndUtc, "20261231T170000Z");
+
+  // 11. Logika Smart Dispatcher auto (jendela 90 menit & prioritas urgent > afternoon > morning)
+  const testSchedule = {
+    morning: { enabled: true, time: "08:30" },
+    afternoon: { enabled: true, time: "15:00" },
+    urgent: { enabled: true, time: "15:30" },
+  };
+  const noSent = { morning: null, afternoon: null, urgent: null };
+
+  assert.equal(resolveDueAutoStage(hmTimeToMinutes("08:29"), testSchedule, noSent), null);
+  assert.equal(resolveDueAutoStage(hmTimeToMinutes("08:30"), testSchedule, noSent), "morning");
+  assert.equal(resolveDueAutoStage(hmTimeToMinutes("10:00"), testSchedule, noSent), "morning");
+  assert.equal(resolveDueAutoStage(hmTimeToMinutes("10:01"), testSchedule, noSent), null);
+  assert.equal(resolveDueAutoStage(hmTimeToMinutes("15:30"), testSchedule, noSent), "urgent");
+  assert.equal(
+    resolveDueAutoStage(hmTimeToMinutes("15:30"), testSchedule, {
+      morning: null,
+      afternoon: null,
+      urgent: "2026-11-26T15:30:00+07:00",
+    }),
+    "afternoon",
+  );
+  assert.equal(
+    resolveDueAutoStage(
+      hmTimeToMinutes("08:30"),
+      { ...testSchedule, morning: { enabled: false, time: "08:30" } },
+      noSent,
+    ),
+    null,
+  );
+
+  console.log("SEMUA VERIFIKASI TIMEZONE, ICS DINAMIS, EMAIL, & SMART DISPATCHER LULUS (11/11 suite).");
 }
 
 runAllAssertions();

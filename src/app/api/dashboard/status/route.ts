@@ -3,37 +3,41 @@ import {
   jsonOk,
   requireAuthenticatedSession,
 } from "@/lib/api-helpers";
-import { getEnv } from "@/lib/env";
 import {
+  getActiveCustomMessage,
+  getActiveRecipient,
+  getActiveSchedule,
   getAllStageSentAt,
   getAttendanceStatus,
   getBotPauseConfig,
   getRecentActivityLogs,
+  getUpcomingOffDays,
 } from "@/lib/store";
 import {
+  formatHmTimeWibLabel,
   formatWibDateIndonesian,
   getNowWibIso,
   getNowWibTimeLabel,
   getTodayWibDate,
+  shiftYmdDate,
 } from "@/lib/timezone";
 import type {
   AttendanceStage,
   DashboardStatusData,
   TimelineStageItem,
   TimelineStageStatus,
+  TodayOffDayStatus,
 } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-const STAGE_DEFINITIONS: Array<{
-  stage: AttendanceStage;
-  label: string;
-  scheduledTimeWib: string;
-}> = [
-  { stage: "morning", label: "Pengingat Pagi + Kalender", scheduledTimeWib: "09.00 WIB" },
-  { stage: "afternoon", label: "Pengecekan Sore", scheduledTimeWib: "15.00 WIB" },
-  { stage: "urgent", label: "Peringatan Urgent + Eskalasi", scheduledTimeWib: "20.30 WIB" },
-];
+const STAGE_LABELS: Record<AttendanceStage, string> = {
+  morning: "Pengingat Pagi + Kalender",
+  afternoon: "Pengecekan Sore",
+  urgent: "Peringatan Urgent + Eskalasi",
+};
+
+const STAGE_ORDER: AttendanceStage[] = ["morning", "afternoon", "urgent"];
 
 export async function GET() {
   try {
@@ -42,33 +46,56 @@ export async function GET() {
       return authFailure;
     }
 
-    const env = getEnv();
     const now = new Date();
     const todayWib = getTodayWibDate(now);
+    const tomorrowWib = shiftYmdDate(todayWib, 1);
 
-    const [attendance, sentMap, pauseConfig, logs] = await Promise.all([
+    const [
+      attendance,
+      sentMap,
+      pauseConfig,
+      logs,
+      recipient,
+      customMessage,
+      upcomingOffDays,
+      schedule,
+    ] = await Promise.all([
       getAttendanceStatus(todayWib),
       getAllStageSentAt(todayWib),
       getBotPauseConfig(),
       getRecentActivityLogs(15),
+      getActiveRecipient(),
+      getActiveCustomMessage(todayWib),
+      getUpcomingOffDays(todayWib),
+      getActiveSchedule(),
     ]);
 
-    const timeline: TimelineStageItem[] = STAGE_DEFINITIONS.map((def) => {
-      const sentAt = sentMap[def.stage];
+    const todayOffEntry = upcomingOffDays.find((entry) => entry.date === todayWib);
+    const todayOffDay: TodayOffDayStatus = todayOffEntry
+      ? { isOff: true, ...(todayOffEntry.note ? { note: todayOffEntry.note } : {}) }
+      : { isOff: false };
+
+    const timeline: TimelineStageItem[] = STAGE_ORDER.map((stage) => {
+      const stageCfg = schedule[stage];
+      const sentAt = sentMap[stage];
       let status: TimelineStageStatus = "waiting";
 
       if (sentAt) {
         status = "sent";
+      } else if (!stageCfg.enabled) {
+        status = "disabled";
       } else if (attendance) {
         status = "cancelled";
       } else if (pauseConfig.paused) {
         status = "paused";
+      } else if (todayOffDay.isOff) {
+        status = "off_day";
       }
 
       return {
-        stage: def.stage,
-        label: def.label,
-        scheduledTimeWib: def.scheduledTimeWib,
+        stage,
+        label: STAGE_LABELS[stage],
+        scheduledTimeWib: formatHmTimeWibLabel(stageCfg.time),
         status,
         sentAt,
       };
@@ -76,11 +103,17 @@ export async function GET() {
 
     const data: DashboardStatusData = {
       todayWib,
+      tomorrowWib,
       todayFormatted: formatWibDateIndonesian(todayWib),
       nowWibIso: getNowWibIso(now),
       nowWibTime: getNowWibTimeLabel(now),
-      partnerName: env.PARTNER_NAME,
-      partnerEmail: env.PARTNER_EMAIL,
+      partnerName: recipient.name,
+      partnerEmail: recipient.email,
+      recipient,
+      customMessage,
+      todayOffDay,
+      upcomingOffDays,
+      schedule,
       attendance,
       timeline,
       pauseConfig,

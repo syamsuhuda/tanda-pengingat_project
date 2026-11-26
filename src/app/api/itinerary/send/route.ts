@@ -5,9 +5,8 @@ import {
   parseJsonBody,
   requireAuthenticatedSession,
 } from "@/lib/api-helpers";
-import { getEnv } from "@/lib/env";
 import { sendItineraryInvitation } from "@/lib/mailer";
-import { appendActivityLog, listFriendContacts } from "@/lib/store";
+import { appendActivityLog, getActiveRecipient, listFriendContacts } from "@/lib/store";
 import type { RecipientAddress } from "@/lib/types";
 import { sendItinerarySchema } from "@/lib/validators";
 
@@ -29,13 +28,13 @@ export async function POST(request: Request) {
 
     const { mode, contactIds, manualEmails, subject, alarmMinutes, icsMode, sessions } =
       parsed.data;
-    const env = getEnv();
 
     let recipients: RecipientAddress[] = [];
 
     if (mode === "date") {
-      // Pada mode Date Itinerary, server selalu mengunci penerima ke PARTNER_EMAIL.
-      recipients = [{ name: env.PARTNER_NAME, email: env.PARTNER_EMAIL }];
+      // Pada mode Date Itinerary, server selalu mengambil penerima aktif terbaru dari Redis/env.
+      const activeRecipient = await getActiveRecipient();
+      recipients = [{ name: activeRecipient.name, email: activeRecipient.email }];
     } else {
       const allContacts = await listFriendContacts();
       const contactById = new Map(allContacts.map((c) => [c.id, c]));

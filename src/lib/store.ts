@@ -1,15 +1,23 @@
 import crypto from "node:crypto";
+import { getEnv } from "./env";
 import { getRedis } from "./redis";
-import { getNowWibIso } from "./timezone";
+import { getNowWibIso, isValidHmTime, isValidYmdDate } from "./timezone";
 import type {
+  ActiveRecipientConfig,
   ActivityLogEntry,
   ActivityLogResult,
   ActivityLogType,
+  AttendanceScheduleConfig,
   AttendanceStage,
   AttendanceStatusRecord,
   BotPauseConfig,
   ConfirmedBy,
+  CustomMessageConfig,
+  CustomMessageScope,
   FriendContact,
+  OffDayEntry,
+  ScheduleStageConfig,
+  TodayOffDayStatus,
 } from "./types";
 
 export const ATTENDANCE_STATUS_TTL_SECONDS = 172_800; // 48 jam
@@ -22,6 +30,10 @@ const REDIS_KEYS = {
   attendanceStatus: (dateWib: string) => `absen:status:${dateWib}`,
   attendanceSent: (dateWib: string, stage: AttendanceStage) => `absen:sent:${dateWib}:${stage}`,
   botPaused: "bot:config:paused",
+  botRecipient: "bot:config:recipient",
+  botCustomMessage: "bot:config:custom_message",
+  botOffDays: "bot:config:off_days",
+  botSchedule: "bot:config:schedule",
   friendContacts: "contacts:friends",
   activityLogs: "logs:activity",
   authRateLimit: (ipHash: string) => `auth:ratelimit:${ipHash}`,
@@ -167,6 +179,313 @@ export async function setBotPauseConfig(
   const redis = getRedis();
   await redis.set(REDIS_KEYS.botPaused, JSON.stringify(config));
   return config;
+}
+
+export async function getActiveRecipient(): Promise<ActiveRecipientConfig> {
+  const env = getEnv();
+  const redis = getRedis();
+  const raw = await redis.get(REDIS_KEYS.botRecipient);
+  const parsed = parseStoredJson<ActiveRecipientConfig>(raw);
+
+  if (
+    parsed &&
+    typeof parsed.name === "string" &&
+    parsed.name.trim().length > 0 &&
+    typeof parsed.email === "string" &&
+    parsed.email.trim().length > 0
+  ) {
+    return {
+      name: parsed.name.trim(),
+      email: parsed.email.trim().toLowerCase(),
+      updatedAt: typeof parsed.updatedAt === "string" ? parsed.updatedAt : "",
+    };
+  }
+
+  return {
+    name: env.PARTNER_NAME,
+    email: env.PARTNER_EMAIL,
+    updatedAt: "",
+  };
+}
+
+export async function setActiveRecipient(input: {
+  name: string;
+  email: string;
+}): Promise<ActiveRecipientConfig> {
+  const config: ActiveRecipientConfig = {
+    name: input.name.trim(),
+    email: input.email.trim().toLowerCase(),
+    updatedAt: getNowWibIso(),
+  };
+
+  const redis = getRedis();
+  await redis.set(REDIS_KEYS.botRecipient, JSON.stringify(config));
+
+  await appendActivityLog({
+    type: "recipient_updated",
+    summary: `Penerima aktif diperbarui ke ${config.name} (${config.email}).`,
+    result: "success",
+  });
+
+  return config;
+}
+
+export async function getActiveCustomMessage(
+  todayWib: string,
+): Promise<CustomMessageConfig | null> {
+  const redis = getRedis();
+  const raw = await redis.get(REDIS_KEYS.botCustomMessage);
+  const parsed = parseStoredJson<CustomMessageConfig>(raw);
+
+  if (!parsed || typeof parsed.message !== "string" || parsed.message.trim().length === 0) {
+    return null;
+  }
+
+  const scope: CustomMessageScope = parsed.scope === "always" ? "always" : "today_only";
+  if (scope === "today_only" && parsed.activeDate !== todayWib) {
+    return null;
+  }
+
+  return {
+    message: parsed.message.trim(),
+    scope,
+    ...(parsed.activeDate ? { activeDate: parsed.activeDate } : {}),
+    updatedAt: typeof parsed.updatedAt === "string" ? parsed.updatedAt : "",
+  };
+}
+
+export async function clearCustomMessage(): Promise<void> {
+  const redis = getRedis();
+  await redis.del(REDIS_KEYS.botCustomMessage);
+
+  await appendActivityLog({
+    type: "message_updated",
+    summary: "Pesan khusus pengingat dihapus.",
+    result: "success",
+  });
+}
+
+export async function setCustomMessage(input: {
+  message: string;
+  scope: CustomMessageScope;
+  todayWib: string;
+}): Promise<CustomMessageConfig | null> {
+  const trimmed = input.message.trim();
+  if (!trimmed) {
+    await clearCustomMessage();
+    return null;
+  }
+
+  const config: CustomMessageConfig = {
+    message: trimmed,
+    scope: input.scope,
+    ...(input.scope === "today_only" ? { activeDate: input.todayWib } : {}),
+    updatedAt: getNowWibIso(),
+  };
+
+  const redis = getRedis();
+  await redis.set(REDIS_KEYS.botCustomMessage, JSON.stringify(config));
+
+  const scopeLabel = input.scope === "today_only" ? `hari ini (${input.todayWib})` : "permanen";
+  await appendActivityLog({
+    type: "message_updated",
+    summary: `Pesan khusus pengingat disimpan (${scopeLabel}).`,
+    result: "success",
+  });
+
+  return config;
+}
+
+export async function isOffDay(dateWib: string): Promise<TodayOffDayStatus> {
+  const redis = getRedis();
+  const raw = await redis.hget(REDIS_KEYS.botOffDays, dateWib);
+  const parsed = parseStoredJson<OffDayEntry>(raw);
+
+  if (!parsed || parsed.date !== dateWib) {
+    return { isOff: false };
+  }
+
+  return {
+    isOff: true,
+    ...(parsed.note ? { note: parsed.note } : {}),
+  };
+}
+
+export async function getUpcomingOffDays(todayWib: string): Promise<OffDayEntry[]> {
+  const redis = getRedis();
+  const rawHash = await redis.hgetall<Record<string, unknown>>(REDIS_KEYS.botOffDays);
+  if (!rawHash) {
+    return [];
+  }
+
+  const pastFields: string[] = [];
+  const upcoming: OffDayEntry[] = [];
+
+  for (const [field, value] of Object.entries(rawHash)) {
+    const parsed = parseStoredJson<OffDayEntry>(value);
+    const entryDate = parsed?.date && isValidYmdDate(parsed.date) ? parsed.date : field;
+
+    if (!isValidYmdDate(entryDate) || entryDate < todayWib) {
+      pastFields.push(field);
+      continue;
+    }
+
+    upcoming.push({
+      date: entryDate,
+      ...(parsed?.note?.trim() ? { note: parsed.note.trim() } : {}),
+      createdAt: typeof parsed?.createdAt === "string" ? parsed.createdAt : "",
+    });
+  }
+
+  if (pastFields.length > 0) {
+    await redis.hdel(REDIS_KEYS.botOffDays, ...pastFields);
+  }
+
+  return upcoming.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export async function addOffDays(
+  items: Array<{ date: string; note?: string }>,
+): Promise<OffDayEntry[]> {
+  if (items.length === 0) {
+    return [];
+  }
+
+  const createdAt = getNowWibIso();
+  const deduped = new Map<string, OffDayEntry>();
+
+  for (const item of items) {
+    const cleanNote = item.note?.trim();
+    deduped.set(item.date, {
+      date: item.date,
+      ...(cleanNote ? { note: cleanNote } : {}),
+      createdAt,
+    });
+  }
+
+  const entries = Array.from(deduped.values()).sort((a, b) => a.date.localeCompare(b.date));
+  const payload: Record<string, string> = {};
+  for (const entry of entries) {
+    payload[entry.date] = JSON.stringify(entry);
+  }
+
+  const redis = getRedis();
+  await redis.hset(REDIS_KEYS.botOffDays, payload);
+
+  const dateSummary =
+    entries.length === 1
+      ? `${entries[0]?.date}${entries[0]?.note ? ` (${entries[0].note})` : ""}`
+      : `${entries.length} tanggal (${entries[0]?.date} s.d. ${entries[entries.length - 1]?.date})`;
+
+  await appendActivityLog({
+    type: "off_days_updated",
+    summary: `Tanggal libur ditambahkan: ${dateSummary}.`,
+    result: "success",
+  });
+
+  return entries;
+}
+
+export async function removeOffDay(dateWib: string): Promise<boolean> {
+  const redis = getRedis();
+  const removed = await redis.hdel(REDIS_KEYS.botOffDays, dateWib);
+
+  if (removed > 0) {
+    await appendActivityLog({
+      type: "off_days_updated",
+      summary: `Tanggal libur dibatalkan: ${dateWib}.`,
+      result: "success",
+    });
+    return true;
+  }
+
+  return false;
+}
+
+export const DEFAULT_ATTENDANCE_SCHEDULE: AttendanceScheduleConfig = {
+  morning: { enabled: true, time: "09:00" },
+  afternoon: { enabled: true, time: "15:00" },
+  urgent: { enabled: true, time: "20:30" },
+  updatedAt: "",
+};
+
+function sanitizeStageConfig(
+  raw: Partial<ScheduleStageConfig> | undefined,
+  fallback: ScheduleStageConfig,
+): ScheduleStageConfig {
+  if (
+    raw &&
+    typeof raw.enabled === "boolean" &&
+    typeof raw.time === "string" &&
+    isValidHmTime(raw.time)
+  ) {
+    return { enabled: raw.enabled, time: raw.time };
+  }
+  return { ...fallback };
+}
+
+export async function getActiveSchedule(): Promise<AttendanceScheduleConfig> {
+  const redis = getRedis();
+  const raw = await redis.get(REDIS_KEYS.botSchedule);
+  const parsed = parseStoredJson<Partial<AttendanceScheduleConfig>>(raw);
+
+  if (!parsed) {
+    return {
+      morning: { ...DEFAULT_ATTENDANCE_SCHEDULE.morning },
+      afternoon: { ...DEFAULT_ATTENDANCE_SCHEDULE.afternoon },
+      urgent: { ...DEFAULT_ATTENDANCE_SCHEDULE.urgent },
+      updatedAt: "",
+    };
+  }
+
+  return {
+    morning: sanitizeStageConfig(parsed.morning, DEFAULT_ATTENDANCE_SCHEDULE.morning),
+    afternoon: sanitizeStageConfig(parsed.afternoon, DEFAULT_ATTENDANCE_SCHEDULE.afternoon),
+    urgent: sanitizeStageConfig(parsed.urgent, DEFAULT_ATTENDANCE_SCHEDULE.urgent),
+    updatedAt: typeof parsed.updatedAt === "string" ? parsed.updatedAt : "",
+  };
+}
+
+export async function setActiveSchedule(input: {
+  morning: ScheduleStageConfig;
+  afternoon: ScheduleStageConfig;
+  urgent: ScheduleStageConfig;
+}): Promise<AttendanceScheduleConfig> {
+  const config: AttendanceScheduleConfig = {
+    morning: { enabled: input.morning.enabled, time: input.morning.time },
+    afternoon: { enabled: input.afternoon.enabled, time: input.afternoon.time },
+    urgent: { enabled: input.urgent.enabled, time: input.urgent.time },
+    updatedAt: getNowWibIso(),
+  };
+
+  const redis = getRedis();
+  await redis.set(REDIS_KEYS.botSchedule, JSON.stringify(config));
+
+  const parts: string[] = [
+    `Pagi ${config.morning.enabled ? config.morning.time : "nonaktif"}`,
+    `Sore ${config.afternoon.enabled ? config.afternoon.time : "nonaktif"}`,
+    `Urgent ${config.urgent.enabled ? config.urgent.time : "nonaktif"}`,
+  ];
+
+  await appendActivityLog({
+    type: "schedule_updated",
+    summary: `Jadwal pengingat diperbarui (${parts.join(", ")} WIB).`,
+    result: "success",
+  });
+
+  return config;
+}
+
+export async function appendActivityLogIfNotDuplicate(input: {
+  type: ActivityLogType;
+  summary: string;
+  result: ActivityLogResult;
+}): Promise<ActivityLogEntry | null> {
+  const latest = await getRecentActivityLogs(1);
+  if (latest[0] && latest[0].type === input.type && latest[0].summary === input.summary) {
+    return null;
+  }
+  return appendActivityLog(input);
 }
 
 export async function listFriendContacts(): Promise<FriendContact[]> {

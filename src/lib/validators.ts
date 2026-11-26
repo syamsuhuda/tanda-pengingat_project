@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { isValidHmTime, isValidYmdDate } from "./timezone";
+import { hmTimeToMinutes, isValidHmTime, isValidYmdDate } from "./timezone";
 
-const ymdDateSchema = z
+export const ymdDateSchema = z
   .string()
   .trim()
   .refine(isValidYmdDate, "Format tanggal harus YYYY-MM-DD yang valid");
@@ -35,7 +35,7 @@ export const loginSchema = z.object({
 });
 
 export const cronAttendanceSchema = z.object({
-  stage: z.enum(["morning", "afternoon", "urgent"]),
+  stage: z.enum(["auto", "morning", "afternoon", "urgent"]).default("auto"),
 });
 
 export const confirmAttendanceSchema = z.union([
@@ -53,12 +53,19 @@ export const confirmAttendanceSchema = z.union([
 ]);
 
 export const triggerAttendanceSchema = z.object({
+  customNote: z
+    .string()
+    .trim()
+    .max(500, "Catatan tambahan maksimal 500 karakter")
+    .optional()
+    .transform((val) => (val ? val : undefined)),
   note: z
     .string()
     .trim()
-    .max(400, "Catatan tambahan maksimal 400 karakter")
+    .max(500, "Catatan tambahan maksimal 500 karakter")
     .optional()
     .transform((val) => (val ? val : undefined)),
+  useActiveMessage: z.boolean().optional().default(false),
   includeIcs: z.boolean().default(true),
   forceSend: z.boolean().default(false),
 });
@@ -72,6 +79,83 @@ export const pauseConfigSchema = z.object({
     .optional()
     .transform((val) => (val ? val : undefined)),
 });
+
+export const recipientConfigSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "Nama pasangan wajib diisi")
+    .max(60, "Nama pasangan maksimal 60 karakter"),
+  email: z.string().trim().email("Format email pasangan tidak valid").max(160),
+});
+
+export const customMessageSchema = z.object({
+  message: z.string().trim().max(500, "Pesan khusus maksimal 500 karakter"),
+  scope: z.enum(["today_only", "always"]).default("today_only"),
+});
+
+export const addOffDaysSchema = z.object({
+  dates: z
+    .array(ymdDateSchema)
+    .min(1, "Pilih minimal satu tanggal libur")
+    .max(31, "Maksimal 31 tanggal dalam satu permintaan"),
+  note: z
+    .string()
+    .trim()
+    .max(160, "Catatan libur maksimal 160 karakter")
+    .optional()
+    .transform((val) => (val ? val : undefined)),
+});
+
+const scheduleStageSchema = z.object({
+  enabled: z.boolean(),
+  time: hmTimeSchema,
+});
+
+export const scheduleConfigSchema = z
+  .object({
+    morning: scheduleStageSchema,
+    afternoon: scheduleStageSchema,
+    urgent: scheduleStageSchema,
+  })
+  .superRefine((data, ctx) => {
+    if (!data.morning.enabled && !data.afternoon.enabled && !data.urgent.enabled) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Minimal satu tahap pengingat harus aktif.",
+        path: ["morning"],
+      });
+      return;
+    }
+
+    const morningMin = hmTimeToMinutes(data.morning.time);
+    const afternoonMin = hmTimeToMinutes(data.afternoon.time);
+    const urgentMin = hmTimeToMinutes(data.urgent.time);
+
+    if (data.morning.enabled && data.afternoon.enabled && morningMin >= afternoonMin) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Jam Pengingat Pagi harus lebih awal dari jam Pengecekan Sore.",
+        path: ["afternoon", "time"],
+      });
+    }
+
+    if (data.afternoon.enabled && data.urgent.enabled && afternoonMin >= urgentMin) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Jam Pengecekan Sore harus lebih awal dari jam Peringatan Urgent.",
+        path: ["urgent", "time"],
+      });
+    }
+
+    if (data.morning.enabled && data.urgent.enabled && morningMin >= urgentMin) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Jam Pengingat Pagi harus lebih awal dari jam Peringatan Urgent.",
+        path: ["urgent", "time"],
+      });
+    }
+  });
 
 export const resetAttendanceSchema = z.object({
   clearSentLocks: z.boolean().optional().default(false),

@@ -1,29 +1,84 @@
-import {
-  handleRouteError,
-  jsonError,
-  jsonOk,
-  parseJsonBody,
-} from "@/lib/api-helpers";
+import { handleRouteError, jsonError, jsonOk } from "@/lib/api-helpers";
 import { getAppBaseUrl } from "@/lib/env";
 import { sendAttendanceReminder, sendUrgentWithEscalation } from "@/lib/mailer";
 import { createAttendanceToken, verifyCronBearerToken } from "@/lib/security";
 import {
   appendActivityLog,
+  appendActivityLogIfNotDuplicate,
+  getActiveCustomMessage,
+  getActiveRecipient,
+  getActiveSchedule,
+  getAllStageSentAt,
   getAttendanceStatus,
   getBotPauseConfig,
-  getStageSentAt,
+  isOffDay,
   setStageSentLock,
 } from "@/lib/store";
-import { getTodayWibDate } from "@/lib/timezone";
+import {
+  formatHmTimeWibLabel,
+  getCurrentWibMinutes,
+  getTodayWibDate,
+  resolveDueAutoStage,
+} from "@/lib/timezone";
+import type { AttendanceStage } from "@/lib/types";
 import { cronAttendanceSchema } from "@/lib/validators";
 
 export const dynamic = "force-dynamic";
 
-const STAGE_LABEL = {
-  morning: "Pagi (09.00 WIB)",
-  afternoon: "Sore (15.00 WIB)",
-  urgent: "Urgent (20.30 WIB)",
+const STAGE_NAME = {
+  morning: "Pagi",
+  afternoon: "Sore",
+  urgent: "Urgent",
 } as const;
+
+async function resolveRequestedStage(
+  request: Request,
+): Promise<
+  | { ok: true; stage: "auto" | AttendanceStage }
+  | { ok: false; response: ReturnType<typeof jsonError> }
+> {
+  const queryStage = new URL(request.url).searchParams.get("stage")?.trim();
+  const rawBody = await request.text();
+
+  if (!rawBody.trim()) {
+    const parsed = cronAttendanceSchema.safeParse(queryStage ? { stage: queryStage } : {});
+    if (!parsed.success) {
+      return {
+        ok: false,
+        response: jsonError(
+          "Parameter stage harus berupa auto, morning, afternoon, atau urgent.",
+          "VALIDATION_ERROR",
+          400,
+        ),
+      };
+    }
+    return { ok: true, stage: parsed.data.stage };
+  }
+
+  let bodyObj: unknown;
+  try {
+    bodyObj = JSON.parse(rawBody);
+  } catch {
+    return {
+      ok: false,
+      response: jsonError("Payload JSON tidak valid.", "INVALID_JSON", 400),
+    };
+  }
+
+  const parsed = cronAttendanceSchema.safeParse(bodyObj);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      response: jsonError(
+        parsed.error.issues[0]?.message ?? "Parameter stage tidak valid.",
+        "VALIDATION_ERROR",
+        400,
+      ),
+    };
+  }
+
+  return { ok: true, stage: parsed.data.stage };
+}
 
 export async function POST(request: Request) {
   try {
@@ -32,80 +87,142 @@ export async function POST(request: Request) {
       return jsonError("Header Authorization Bearer CRON_SECRET tidak valid.", "UNAUTHORIZED", 401);
     }
 
-    const parsed = await parseJsonBody(request, cronAttendanceSchema);
-    if (!parsed.success) {
-      return parsed.response;
+    const stageResult = await resolveRequestedStage(request);
+    if (!stageResult.ok) {
+      return stageResult.response;
     }
 
-    const { stage } = parsed.data;
-    const todayWib = getTodayWibDate();
+    const requestedStage = stageResult.stage;
+    const isAuto = requestedStage === "auto";
+    const logSkip = isAuto ? appendActivityLogIfNotDuplicate : appendActivityLog;
 
-    const [pauseConfig, attendance, sentAt] = await Promise.all([
+    const now = new Date();
+    const todayWib = getTodayWibDate(now);
+
+    const [pauseConfig, todayOffDay, attendance] = await Promise.all([
       getBotPauseConfig(),
+      isOffDay(todayWib),
       getAttendanceStatus(todayWib),
-      getStageSentAt(todayWib, stage),
     ]);
 
     if (pauseConfig.paused) {
-      await appendActivityLog({
+      await logSkip({
         type: "cron_skipped",
-        summary: `Jadwal ${STAGE_LABEL[stage]} (${todayWib}) dilewati karena Mode Jeda Bot aktif.`,
+        summary: `Jadwal pengingat (${todayWib}) dilewati karena Mode Jeda Bot aktif.`,
         result: "skipped",
       });
       return jsonOk("Jadwal dilewati karena Mode Jeda Bot aktif.", {
+        status: "skipped_paused",
         skipped: true,
         reason: "paused",
         dateWib: todayWib,
-        stage,
+        stage: requestedStage,
+      });
+    }
+
+    if (todayOffDay.isOff) {
+      await logSkip({
+        type: "cron_skipped",
+        summary: `Jadwal pengingat (${todayWib}) dilewati karena hari ini libur${todayOffDay.note ? ` (${todayOffDay.note})` : ""}.`,
+        result: "skipped",
+      });
+      return jsonOk("Jadwal dilewati karena hari ini terdaftar sebagai hari libur.", {
+        status: "skipped_off_day",
+        skipped: true,
+        reason: "off_day",
+        dateWib: todayWib,
+        stage: requestedStage,
+        ...(todayOffDay.note ? { note: todayOffDay.note } : {}),
       });
     }
 
     if (attendance) {
-      await appendActivityLog({
+      await logSkip({
         type: "cron_skipped",
-        summary: `Jadwal ${STAGE_LABEL[stage]} (${todayWib}) dibatalkan karena absen sudah dikonfirmasi.`,
+        summary: `Jadwal pengingat (${todayWib}) dibatalkan karena absen hari ini sudah dikonfirmasi.`,
         result: "skipped",
       });
       return jsonOk("Jadwal dibatalkan karena absen hari ini sudah dikonfirmasi.", {
+        status: "skipped_confirmed",
         skipped: true,
         reason: "already_confirmed",
         dateWib: todayWib,
-        stage,
+        stage: requestedStage,
         confirmedAt: attendance.confirmedAt,
       });
     }
 
-    if (sentAt) {
-      await appendActivityLog({
-        type: "cron_skipped",
-        summary: `Jadwal ${STAGE_LABEL[stage]} (${todayWib}) dilewati karena sudah pernah dikirim.`,
-        result: "skipped",
-      });
-      return jsonOk("Pengingat untuk tahap ini sudah dikirim sebelumnya (idempotent).", {
-        skipped: true,
-        reason: "already_sent",
-        dateWib: todayWib,
-        stage,
-        sentAt,
-      });
+    const [schedule, sentMap] = await Promise.all([
+      getActiveSchedule(),
+      getAllStageSentAt(todayWib),
+    ]);
+
+    let targetStage: AttendanceStage;
+
+    if (isAuto) {
+      const nowMinutes = getCurrentWibMinutes(now);
+      const dueStage = resolveDueAutoStage(nowMinutes, schedule, sentMap);
+
+      if (!dueStage) {
+        // Tidak mencatat ke logs:activity agar 30 slot log tidak penuh oleh pengecekan rutin 30 menit.
+        return jsonOk("Belum ada tahap pengingat yang masuk jendela kirim saat ini.", {
+          status: "skipped_not_due",
+          skipped: true,
+          reason: "not_due",
+          dateWib: todayWib,
+          stage: "auto",
+          nowMinutesWib: nowMinutes,
+        });
+      }
+
+      targetStage = dueStage;
+    } else {
+      const alreadySentAt = sentMap[requestedStage];
+      if (alreadySentAt) {
+        await appendActivityLog({
+          type: "cron_skipped",
+          summary: `Jadwal ${STAGE_NAME[requestedStage]} (${todayWib}) dilewati karena sudah pernah dikirim.`,
+          result: "skipped",
+        });
+        return jsonOk("Pengingat untuk tahap ini sudah dikirim sebelumnya (idempotent).", {
+          status: "skipped_duplicate",
+          skipped: true,
+          reason: "already_sent",
+          dateWib: todayWib,
+          stage: requestedStage,
+          sentAt: alreadySentAt,
+        });
+      }
+
+      targetStage = requestedStage;
     }
+
+    const [recipient, activeCustomMessage] = await Promise.all([
+      getActiveRecipient(),
+      getActiveCustomMessage(todayWib),
+    ]);
 
     const requestOrigin = new URL(request.url).origin;
     const baseUrl = getAppBaseUrl(requestOrigin);
     const token = createAttendanceToken(todayWib);
     const confirmUrl = `${baseUrl}/confirm?date=${encodeURIComponent(todayWib)}&token=${encodeURIComponent(token)}`;
+    const customMessageText = activeCustomMessage?.message ?? null;
+    const scheduledTimeWib = formatHmTimeWibLabel(schedule[targetStage].time);
 
-    if (stage === "urgent") {
+    if (targetStage === "urgent") {
       const dispatch = await sendUrgentWithEscalation({
         dateWib: todayWib,
+        recipient,
         confirmUrl,
         dashboardUrl: baseUrl,
+        customMessage: customMessageText,
+        scheduledTimeWib,
       });
 
       if (!dispatch.partner.ok && !dispatch.escalation.ok) {
         await appendActivityLog({
           type: "cron_urgent",
-          summary: `Gagal mengirim peringatan urgent dan eskalasi (${todayWib}).`,
+          summary: `Gagal mengirim peringatan urgent (${scheduledTimeWib}) ke ${recipient.name} dan eskalasi (${todayWib}).`,
           result: "error",
         });
         return jsonError(
@@ -124,8 +241,8 @@ export async function POST(request: Request) {
       await appendActivityLog({
         type: "cron_urgent",
         summary: bothOk
-          ? `Peringatan urgent 20.30 WIB dan email eskalasi terkirim (${todayWib}).`
-          : `Pengiriman urgent 20.30 WIB (${todayWib}) berhasil sebagian (partner: ${dispatch.partner.ok ? "ok" : "gagal"}, eskalasi: ${dispatch.escalation.ok ? "ok" : "gagal"}).`,
+          ? `Peringatan urgent (${scheduledTimeWib}) ke ${recipient.name} dan email eskalasi terkirim (${todayWib}).`
+          : `Pengiriman urgent (${scheduledTimeWib}, ${todayWib}) berhasil sebagian (partner: ${dispatch.partner.ok ? "ok" : "gagal"}, eskalasi: ${dispatch.escalation.ok ? "ok" : "gagal"}).`,
         result: bothOk ? "success" : "partial",
       });
 
@@ -134,38 +251,48 @@ export async function POST(request: Request) {
           ? "Peringatan urgent dan email eskalasi berhasil dikirim."
           : "Pengiriman urgent selesai sebagian; cek detail hasil dan log aktivitas.",
         {
+          status: bothOk ? "sent" : "partial",
           skipped: false,
           dateWib: todayWib,
-          stage,
+          stage: targetStage,
+          requestedStage,
+          scheduledTimeWib,
           dispatch,
         },
         bothOk ? 200 : 207,
       );
     }
 
-    const includeIcs = stage === "morning";
+    const includeIcs = targetStage === "morning";
     const sent = await sendAttendanceReminder({
-      stage,
+      stage: targetStage,
       dateWib: todayWib,
+      recipient,
       confirmUrl,
       includeIcs,
+      customMessage: customMessageText,
+      morningScheduleTime: schedule.morning.time,
+      scheduledTimeWib,
     });
 
-    const lockTimestamp = await setStageSentLock(todayWib, stage);
+    const lockTimestamp = await setStageSentLock(todayWib, targetStage);
 
     await appendActivityLog({
-      type: stage === "morning" ? "cron_morning" : "cron_afternoon",
+      type: targetStage === "morning" ? "cron_morning" : "cron_afternoon",
       summary:
-        stage === "morning"
-          ? `Pengingat pagi 09.00 WIB + undangan kalender (.ics) terkirim (${todayWib}).`
-          : `Pengecekan sore 15.00 WIB terkirim tanpa duplikat .ics (${todayWib}).`,
+        targetStage === "morning"
+          ? `Pengingat pagi (${scheduledTimeWib}) + .ics terkirim ke ${recipient.name} (${todayWib}).`
+          : `Pengecekan sore (${scheduledTimeWib}) terkirim ke ${recipient.name} (${todayWib}).`,
       result: "success",
     });
 
-    return jsonOk(`Pengingat ${STAGE_LABEL[stage]} berhasil dikirim.`, {
+    return jsonOk(`Pengingat ${STAGE_NAME[targetStage]} (${scheduledTimeWib}) berhasil dikirim ke ${recipient.name}.`, {
+      status: "sent",
       skipped: false,
       dateWib: todayWib,
-      stage,
+      stage: targetStage,
+      requestedStage,
+      scheduledTimeWib,
       sentAt: lockTimestamp,
       messageId: sent.messageId,
       includeIcs,

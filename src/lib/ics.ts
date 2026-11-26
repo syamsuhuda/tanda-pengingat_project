@@ -1,6 +1,33 @@
 import crypto from "node:crypto";
-import { formatUtcDateForIcs, resolveWibSessionUtcRange, WIB_TIMEZONE } from "./timezone";
+import {
+  addMinutesToHmTime,
+  formatUtcDateForIcs,
+  resolveWibSessionUtcRange,
+  WIB_TIMEZONE,
+} from "./timezone";
 import type { RecipientAddress } from "./types";
+
+export function buildAttendanceCalendarSlot(
+  dateWib: string,
+  startTimeWib: string,
+  durationMinutes = 30,
+): {
+  date: string;
+  startTime: string;
+  endTime: string;
+  dtStartUtc: string;
+  dtEndUtc: string;
+} {
+  const endTime = addMinutesToHmTime(startTimeWib, durationMinutes);
+  const range = resolveWibSessionUtcRange(dateWib, startTimeWib, endTime);
+  return {
+    date: dateWib,
+    startTime: startTimeWib,
+    endTime,
+    dtStartUtc: range.dtStartUtc,
+    dtEndUtc: range.dtEndUtc,
+  };
+}
 
 const MAX_ICS_LINE_OCTETS = 75;
 

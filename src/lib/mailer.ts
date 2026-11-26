@@ -6,7 +6,11 @@ import {
   buildEscalationEmail,
   buildItineraryEmail,
 } from "./email-templates";
-import { generateIcsCalendar, slugifyIcsFilename } from "./ics";
+import {
+  buildAttendanceCalendarSlot,
+  generateIcsCalendar,
+  slugifyIcsFilename,
+} from "./ics";
 import { getManualAttendanceSlot, resolveWibSessionUtcRange } from "./timezone";
 import type {
   AlarmMinutes,
@@ -89,81 +93,96 @@ async function sendLayeredEmail(params: LayeredEmailParams): Promise<{ messageId
 export async function sendAttendanceReminder(params: {
   stage: AttendanceStage | "manual";
   dateWib: string;
+  recipient: { name: string; email: string };
   confirmUrl: string;
   includeIcs: boolean;
-  note?: string;
+  customMessage?: string | null;
+  morningScheduleTime?: string;
+  scheduledTimeWib?: string;
 }): Promise<{ messageId: string }> {
   const env = getEnv();
-  const partner: RecipientAddress = {
-    name: env.PARTNER_NAME,
-    email: env.PARTNER_EMAIL,
+  const recipientAddress: RecipientAddress = {
+    name: params.recipient.name,
+    email: params.recipient.email,
   };
+  const cleanMessage = params.customMessage?.trim() || null;
 
   let inlineIcs: string | undefined;
   let icsAttachments: Array<{ filename: string; content: string }> | undefined;
   let calendarSlot:
     | {
-        startTime: string;
-        endTime: string;
-        dtStartUtc: string;
-        dtEndUtc: string;
-        summary: string;
-      }
+      startTime: string;
+      endTime: string;
+      dtStartUtc: string;
+      dtEndUtc: string;
+      summary: string;
+    }
     | undefined;
 
   if (params.includeIcs) {
-    const slot =
+    const morningStart = params.morningScheduleTime ?? "09:00";
+    const resolvedSlot =
       params.stage === "manual"
-        ? getManualAttendanceSlot()
-        : { date: params.dateWib, startTime: "09:00", endTime: "09:30" };
+        ? (() => {
+            const manual = getManualAttendanceSlot();
+            const range = resolveWibSessionUtcRange(manual.date, manual.startTime, manual.endTime);
+            return {
+              date: manual.date,
+              startTime: manual.startTime,
+              endTime: manual.endTime,
+              dtStartUtc: range.dtStartUtc,
+              dtEndUtc: range.dtEndUtc,
+            };
+          })()
+        : buildAttendanceCalendarSlot(params.dateWib, morningStart, 30);
 
-    const summary = `Pengingat Absen Harian (${slot.date})`;
-    const range = resolveWibSessionUtcRange(slot.date, slot.startTime, slot.endTime);
+    const summary = `Pengingat Absen ${params.recipient.name} (${resolvedSlot.date})`;
 
     calendarSlot = {
-      startTime: slot.startTime,
-      endTime: slot.endTime,
-      dtStartUtc: range.dtStartUtc,
-      dtEndUtc: range.dtEndUtc,
+      startTime: resolvedSlot.startTime,
+      endTime: resolvedSlot.endTime,
+      dtStartUtc: resolvedSlot.dtStartUtc,
+      dtEndUtc: resolvedSlot.dtEndUtc,
       summary,
     };
 
     const icsContent = generateIcsCalendar([
       {
-        uidSeed: `attendance:${slot.date}:${params.stage}:${slot.startTime}`,
+        uidSeed: `attendance:${resolvedSlot.date}:${params.stage}:${resolvedSlot.startTime}`,
         summary,
-        date: slot.date,
-        startTime: slot.startTime,
-        endTime: slot.endTime,
+        date: resolvedSlot.date,
+        startTime: resolvedSlot.startTime,
+        endTime: resolvedSlot.endTime,
         description: [
-          `Pengingat absen harian untuk ${env.PARTNER_NAME}.`,
-          params.note ? `Catatan: ${params.note}` : "",
+          `Pengingat absen harian untuk ${params.recipient.name}.`,
+          cleanMessage ? `Pesan khusus: ${cleanMessage}` : "",
           `Konfirmasi absen: ${params.confirmUrl}`,
         ]
           .filter(Boolean)
           .join("\n"),
         organizer: { name: env.SENDER_NAME, email: env.GMAIL_USER },
-        attendees: [partner],
+        attendees: [recipientAddress],
         alarmMinutes: 15,
       },
     ]);
 
     inlineIcs = icsContent;
-    icsAttachments = [{ filename: `absen-${slot.date}.ics`, content: icsContent }];
+    icsAttachments = [{ filename: `absen-${resolvedSlot.date}.ics`, content: icsContent }];
   }
 
   const email = buildAttendanceReminderEmail({
     stage: params.stage,
     dateWib: params.dateWib,
-    partnerName: env.PARTNER_NAME,
+    recipientName: params.recipient.name,
     senderName: env.SENDER_NAME,
     confirmUrl: params.confirmUrl,
-    note: params.note,
+    customMessage: cleanMessage,
+    scheduledTimeWib: params.scheduledTimeWib,
     calendarSlot,
   });
 
   return sendLayeredEmail({
-    to: [partner],
+    to: [recipientAddress],
     subject: email.subject,
     text: email.text,
     html: email.html,
@@ -179,26 +198,33 @@ export interface UrgentDispatchResult {
 
 export async function sendUrgentWithEscalation(params: {
   dateWib: string;
+  recipient: { name: string; email: string };
   confirmUrl: string;
   dashboardUrl: string;
+  customMessage?: string | null;
+  scheduledTimeWib?: string;
 }): Promise<UrgentDispatchResult> {
   const env = getEnv();
 
   const escalationEmail = buildEscalationEmail({
     dateWib: params.dateWib,
-    partnerName: env.PARTNER_NAME,
-    partnerEmail: env.PARTNER_EMAIL,
+    recipientName: params.recipient.name,
+    recipientEmail: params.recipient.email,
     senderName: env.SENDER_NAME,
     dashboardUrl: params.dashboardUrl,
     confirmUrl: params.confirmUrl,
+    scheduledTimeWib: params.scheduledTimeWib,
   });
 
   const [partnerResult, escalationResult] = await Promise.allSettled([
     sendAttendanceReminder({
       stage: "urgent",
       dateWib: params.dateWib,
+      recipient: params.recipient,
       confirmUrl: params.confirmUrl,
       includeIcs: false,
+      customMessage: params.customMessage,
+      scheduledTimeWib: params.scheduledTimeWib,
     }),
     sendLayeredEmail({
       to: [{ name: env.SENDER_NAME, email: env.MY_EMAIL }],
@@ -213,22 +239,22 @@ export async function sendUrgentWithEscalation(params: {
       partnerResult.status === "fulfilled"
         ? { ok: true, messageId: partnerResult.value.messageId }
         : {
-            ok: false,
-            error:
-              partnerResult.reason instanceof Error
-                ? partnerResult.reason.message
-                : "Gagal mengirim email urgent ke penerima utama",
-          },
+          ok: false,
+          error:
+            partnerResult.reason instanceof Error
+              ? partnerResult.reason.message
+              : "Gagal mengirim email urgent ke penerima utama",
+        },
     escalation:
       escalationResult.status === "fulfilled"
         ? { ok: true, messageId: escalationResult.value.messageId }
         : {
-            ok: false,
-            error:
-              escalationResult.reason instanceof Error
-                ? escalationResult.reason.message
-                : "Gagal mengirim email eskalasi",
-          },
+          ok: false,
+          error:
+            escalationResult.reason instanceof Error
+              ? escalationResult.reason.message
+              : "Gagal mengirim email eskalasi",
+        },
   };
 }
 
@@ -283,15 +309,15 @@ export async function sendItineraryInvitation(params: {
 
   const icsAttachments = useSeparateAttachments
     ? icsEvents.map((eventItem, index) => ({
-        filename: `${String(index + 1).padStart(2, "0")}-${slugifyIcsFilename(eventItem.summary, `sesi-${index + 1}`)}`,
-        content: generateIcsCalendar([eventItem]),
-      }))
+      filename: `${String(index + 1).padStart(2, "0")}-${slugifyIcsFilename(eventItem.summary, `sesi-${index + 1}`)}`,
+      content: generateIcsCalendar([eventItem]),
+    }))
     : [
-        {
-          filename: slugifyIcsFilename(params.subject, "undangan-itinerary"),
-          content: combinedIcs,
-        },
-      ];
+      {
+        filename: slugifyIcsFilename(params.subject, "undangan-itinerary"),
+        content: combinedIcs,
+      },
+    ];
 
   const email = buildItineraryEmail({
     mode: params.mode,

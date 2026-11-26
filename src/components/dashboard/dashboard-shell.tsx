@@ -13,7 +13,11 @@ import {
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AttendanceTab } from "@/components/dashboard/attendance-tab";
 import { ItineraryTab } from "@/components/dashboard/itinerary-tab";
-import type { DashboardStatusData, FriendContact } from "@/lib/types";
+import type {
+  ActiveRecipientConfig,
+  DashboardStatusData,
+  FriendContact,
+} from "@/lib/types";
 
 type ActiveTab = "attendance" | "itinerary";
 
@@ -92,6 +96,23 @@ export function DashboardShell() {
   useEffect(() => {
     void Promise.all([loadStatus(false), loadContacts()]);
   }, [loadStatus, loadContacts]);
+
+  const handleRecipientUpdated = useCallback(
+    async (nextRecipient: ActiveRecipientConfig) => {
+      setStatusData((prev) =>
+        prev
+          ? {
+              ...prev,
+              recipient: nextRecipient,
+              partnerName: nextRecipient.name,
+              partnerEmail: nextRecipient.email,
+            }
+          : prev,
+      );
+      await loadStatus(true);
+    },
+    [loadStatus],
+  );
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -269,6 +290,7 @@ export function DashboardShell() {
                 <AttendanceTab
                   data={statusData}
                   onRefresh={() => loadStatus(true)}
+                  onRecipientUpdated={handleRecipientUpdated}
                 />
               ) : null}
             </div>
@@ -282,8 +304,8 @@ export function DashboardShell() {
               {activeTab === "itinerary" ? (
                 <ItineraryTab
                   todayWib={statusData.todayWib}
-                  partnerName={statusData.partnerName}
-                  partnerEmail={statusData.partnerEmail}
+                  partnerName={statusData.recipient.name}
+                  partnerEmail={statusData.recipient.email}
                   contacts={contacts}
                   contactGroups={contactGroups}
                   onContactsChanged={loadContacts}

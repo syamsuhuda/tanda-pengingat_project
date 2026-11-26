@@ -147,6 +147,60 @@ export function parseHmTime(hm: string): { hour: number; minute: number } {
   };
 }
 
+export function hmTimeToMinutes(hm: string): number {
+  const { hour, minute } = parseHmTime(hm);
+  return hour * 60 + minute;
+}
+
+export function addMinutesToHmTime(hm: string, deltaMinutes: number): string {
+  const total = (((hmTimeToMinutes(hm) + deltaMinutes) % 1440) + 1440) % 1440;
+  return `${pad2(Math.floor(total / 60))}:${pad2(total % 60)}`;
+}
+
+export function getCurrentWibMinutes(now: Date = new Date()): number {
+  const p = getWibDateParts(now);
+  return p.hour * 60 + p.minute;
+}
+
+export function formatHmTimeWibLabel(hm: string): string {
+  return `${hm.replace(":", ".")} WIB`;
+}
+
+export const AUTO_DISPATCH_WINDOW_MINUTES = 90;
+
+export function resolveDueAutoStage(
+  nowMinutes: number,
+  schedule: {
+    morning: { enabled: boolean; time: string };
+    afternoon: { enabled: boolean; time: string };
+    urgent: { enabled: boolean; time: string };
+  },
+  sentMap: Record<"morning" | "afternoon" | "urgent", string | null>,
+): "morning" | "afternoon" | "urgent" | null {
+  const priorityOrder: Array<"urgent" | "afternoon" | "morning"> = [
+    "urgent",
+    "afternoon",
+    "morning",
+  ];
+
+  for (const stage of priorityOrder) {
+    const stageConfig = schedule[stage];
+    if (!stageConfig.enabled || sentMap[stage] !== null) {
+      continue;
+    }
+
+    const stageMinutes = hmTimeToMinutes(stageConfig.time);
+    if (
+      nowMinutes >= stageMinutes &&
+      nowMinutes <= stageMinutes + AUTO_DISPATCH_WINDOW_MINUTES
+    ) {
+      return stage;
+    }
+  }
+
+  return null;
+}
+
 export function shiftYmdDate(ymd: string, deltaDays: number): string {
   const { year, month, day } = parseYmdDate(ymd);
   const shifted = new Date(Date.UTC(year, month - 1, day + deltaDays));
@@ -240,6 +294,14 @@ export function formatWibDateShortIndonesian(ymd: string): string {
   const { year, month, day } = parseYmdDate(ymd);
   const monthName = INDONESIAN_SHORT_MONTHS[month - 1] ?? "";
   return `${day} ${monthName} ${year}`;
+}
+
+export function formatWibDateCompactIndonesian(ymd: string): string {
+  const { year, month, day } = parseYmdDate(ymd);
+  const utcDay = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  const dayName = INDONESIAN_DAYS[utcDay] ?? "";
+  const monthName = INDONESIAN_SHORT_MONTHS[month - 1] ?? "";
+  return `${dayName}, ${day} ${monthName} ${year}`;
 }
 
 export function formatIsoToWibTime(isoString: string): string {

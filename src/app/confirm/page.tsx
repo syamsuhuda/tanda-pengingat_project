@@ -5,9 +5,9 @@ import {
   type ConfirmInitialState,
 } from "@/components/confirm-attendance-card";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { EnvConfigurationError, getEnv } from "@/lib/env";
+import { EnvConfigurationError } from "@/lib/env";
 import { verifyAttendanceToken } from "@/lib/security";
-import { getAttendanceStatus } from "@/lib/store";
+import { getActiveRecipient, getAttendanceStatus } from "@/lib/store";
 import {
   formatIsoToWibTime,
   formatWibDateIndonesian,
@@ -51,8 +51,8 @@ export default async function ConfirmPage({ searchParams }: ConfirmPageProps) {
       initialState = "invalid_window";
     } else {
       try {
-        const env = getEnv();
-        partnerName = env.PARTNER_NAME;
+        const recipient = await getActiveRecipient();
+        partnerName = recipient.name;
 
         if (!verifyAttendanceToken(dateParam, tokenParam)) {
           initialState = "invalid_token";

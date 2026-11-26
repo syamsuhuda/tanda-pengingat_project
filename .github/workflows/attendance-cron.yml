@@ -2,26 +2,23 @@ name: Daily Attendance Reminder Cron
 
 on:
   schedule:
-    # 09.00 WIB (UTC+7)
-    - cron: "0 2 * * *"
-    # 15.00 WIB (UTC+7)
-    - cron: "0 8 * * *"
-    # 20.30 WIB (UTC+7)
-    - cron: "30 13 * * *"
+    # Smart Dispatcher setiap 30 menit (24 jam) mengikuti jam fleksibel yang diatur di dashboard
+    - cron: "0,30 * * * *"
   workflow_dispatch:
     inputs:
       stage:
-        description: "Tahap pengingat absen yang ingin dijalankan"
+        description: "Tahap pengingat absen (auto mengikuti jam di dashboard)"
         required: true
-        default: "morning"
+        default: "auto"
         type: choice
         options:
+          - auto
           - morning
           - afternoon
           - urgent
 
 concurrency:
-  group: attendance-cron-${{ github.event.schedule || github.event.inputs.stage || 'manual' }}
+  group: attendance-cron-${{ github.event.inputs.stage || 'auto' }}
   cancel-in-progress: false
 
 jobs:
@@ -35,27 +32,12 @@ jobs:
         id: stage
         env:
           EVENT_NAME: ${{ github.event_name }}
-          SCHEDULE_EXPR: ${{ github.event.schedule }}
           INPUT_STAGE: ${{ github.event.inputs.stage }}
         run: |
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$INPUT_STAGE" ]; then
             STAGE="$INPUT_STAGE"
           else
-            case "$SCHEDULE_EXPR" in
-              "0 2 * * *")
-                STAGE="morning"
-                ;;
-              "0 8 * * *")
-                STAGE="afternoon"
-                ;;
-              "30 13 * * *")
-                STAGE="urgent"
-                ;;
-              *)
-                echo "Unsupported cron expression: $SCHEDULE_EXPR" >&2
-                exit 1
-                ;;
-            esac
+            STAGE="auto"
           fi
 
           echo "Resolved stage: $STAGE"

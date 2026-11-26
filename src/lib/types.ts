@@ -14,6 +14,44 @@ export interface BotPauseConfig {
   note?: string;
 }
 
+export interface ActiveRecipientConfig {
+  name: string;
+  email: string;
+  updatedAt: string;
+}
+
+export type CustomMessageScope = "today_only" | "always";
+
+export interface CustomMessageConfig {
+  message: string;
+  scope: CustomMessageScope;
+  activeDate?: string;
+  updatedAt: string;
+}
+
+export interface OffDayEntry {
+  date: string;
+  note?: string;
+  createdAt: string;
+}
+
+export interface TodayOffDayStatus {
+  isOff: boolean;
+  note?: string;
+}
+
+export interface ScheduleStageConfig {
+  enabled: boolean;
+  time: string;
+}
+
+export interface AttendanceScheduleConfig {
+  morning: ScheduleStageConfig;
+  afternoon: ScheduleStageConfig;
+  urgent: ScheduleStageConfig;
+  updatedAt: string;
+}
+
 export interface FriendContact {
   id: string;
   name: string;
@@ -31,6 +69,10 @@ export type ActivityLogType =
   | "attendance_confirmed"
   | "attendance_reset"
   | "bot_pause"
+  | "recipient_updated"
+  | "message_updated"
+  | "off_days_updated"
+  | "schedule_updated"
   | "itinerary_sent"
   | "contact_updated";
 
@@ -44,7 +86,7 @@ export interface ActivityLogEntry {
   result: ActivityLogResult;
 }
 
-export type TimelineStageStatus = "sent" | "waiting" | "cancelled" | "paused";
+export type TimelineStageStatus = "sent" | "waiting" | "cancelled" | "paused" | "off_day" | "disabled";
 
 export interface TimelineStageItem {
   stage: AttendanceStage;
@@ -56,11 +98,17 @@ export interface TimelineStageItem {
 
 export interface DashboardStatusData {
   todayWib: string;
+  tomorrowWib: string;
   todayFormatted: string;
   nowWibIso: string;
   nowWibTime: string;
   partnerName: string;
   partnerEmail: string;
+  recipient: ActiveRecipientConfig;
+  customMessage: CustomMessageConfig | null;
+  todayOffDay: TodayOffDayStatus;
+  upcomingOffDays: OffDayEntry[];
+  schedule: AttendanceScheduleConfig;
   attendance: AttendanceStatusRecord | null;
   timeline: TimelineStageItem[];
   pauseConfig: BotPauseConfig;

@@ -1,24 +1,25 @@
 # Pengingat Jadwal
 
-Aplikasi web full-stack dan sistem otomasi latar belakang untuk **Pengingat Absen Harian (WIB)** serta **Generator Undangan Itinerary & Acara** yang terintegrasi langsung ke Gmail dan Google Calendar (RFC 5545/5546). Seluruh komponen dibangun untuk berjalan 100% pada paket gratis (Vercel Hobby, Upstash Redis Free Tier, Gmail SMTP App Password, dan GitHub Actions).
+Aplikasi web full-stack dan sistem otomasi latar belakang untuk **Pengingat Absen Harian (WIB)** serta **Generator Undangan Itinerary & Acara** yang terintegrasi langsung ke Gmail dan Google Calendar (RFC 5545/5546). Seluruh komponen dibangun untuk berjalan 100% pada paket gratis (Vercel Hobby, Upstash Redis Free Tier, Gmail SMTP App Password, dan GitHub Actions atau cron-job.org).
 
 ## Fitur Utama
 
-1. **Pengingat Absen Harian Otomatis (Senin sampai Minggu, zona waktu `Asia/Jakarta` / WIB):**
-   - **09.00 WIB (`morning`):** Mengirim pengingat pagi beserta undangan kalender `.ics` (slot 09.00-09.30 WIB, `VALARM` 15 menit) dan tombol tambah manual Google Calendar ke `PARTNER_EMAIL`.
-   - **15.00 WIB (`afternoon`):** Pengecekan sore ke `PARTNER_EMAIL` jika hari ini belum dikonfirmasi (tanpa duplikat `.ics`, hanya tautan konfirmasi).
-   - **20.30 WIB (`urgent`):** Jika masih belum dikonfirmasi, mengirim peringatan urgent ke `PARTNER_EMAIL` sekaligus email eskalasi terpisah ke `MY_EMAIL` secara paralel (`Promise.allSettled`).
-2. **Konfirmasi Aman Anti-Scanner Email (`/confirm`):**
-   - Tautan email memuat parameter `date` dan `token` HMAC-SHA256.
+1. **Pengingat Absen Harian Fleksibel & Smart Dispatcher (`Asia/Jakarta` / WIB):**
+   - **Jam kirim fleksibel dari dashboard (`bot:config:schedule`):** Default `09:00` (`morning`), `15:00` (`afternoon`), dan `20:30 WIB` (`urgent`), seluruhnya dapat diubah (interval 30 menit) atau dinonaktifkan per tahap dengan validasi urutan kronologis `Pagi < Sore < Urgent`.
+   - **Smart Dispatcher (`stage: "auto"`):** Dipicu setiap 30 menit (`0,30 * * * *`), memiliki jendela toleransi 90 menit untuk menahan jitter cron, memprioritaskan `urgent > afternoon > morning`, dan tidak memenuhi log aktivitas saat belum waktunya (`skipped_not_due`).
+   - **Pagi (`morning`):** Mengirim pengingat pagi + undangan kalender `.ics` berdurasi 30 menit mengikuti jam pagi aktif (`VALARM` 15 menit) dan tombol tambah manual Google Calendar.
+   - **Sore (`afternoon`):** Pengecekan sore jika hari ini belum dikonfirmasi (tanpa duplikat `.ics`, hanya tautan konfirmasi).
+   - **Urgent (`urgent`):** Jika masih belum dikonfirmasi, mengirim peringatan urgent ke penerima aktif sekaligus email eskalasi terpisah ke `MY_EMAIL` secara paralel (`Promise.allSettled`).
+2. **Penerima Dinamis, Pesan Khusus, & Jadwal Libur Fleksibel (Off-Days):**
+   - **Penerima aktif dinamis (`bot:config:recipient`):** Nama dan email pasangan dapat diubah langsung dari dashboard (fallback otomatis ke `PARTNER_NAME`/`PARTNER_EMAIL` di env) dan langsung sinkron ke mode **Date Itinerary**.
+   - **Pesan khusus pengingat (`bot:config:custom_message`):** Catatan pribadi yang disisipkan ke email pengingat otomatis, dapat diatur **Hanya untuk hari ini** (otomatis hilang besok) atau **Pakai terus sampai saya ubah**.
+   - **Jadwal libur fleksibel / shift off-days (`bot:config:off_days`):** Tombol cepat **Liburkan Hari Ini** / **Liburkan Besok** dan penjadwalan tanggal libur mendatang (otomatis *prune* tanggal lampau di Redis).
+3. **Konfirmasi Aman Anti-Scanner Email (`/confirm`):**
+   - Tautan email memuat `date` dan `token` HMAC-SHA256 berbasis `attendance-confirm:{date}` (tetap valid walaupun email penerima diganti di tengah hari).
    - Permintaan `GET` pada halaman `/confirm` bersifat read-only (tidak mengubah Redis), sehingga pemindai tautan email otomatis tidak memicu konfirmasi palsu.
    - Konfirmasi baru disimpan saat pengguna menekan tombol **Konfirmasi: Saya Sudah Absen** (`POST /api/attendance/confirm`, TTL 48 jam, idempotent, jendela validasi hari ini dan H-1 WIB).
-3. **Dashboard Kontrol Manual (`/`):**
-   - Status absen hari ini (`Belum Absen` / `Sudah Absen` + jam WIB), tombol konfirmasi manual, serta **Reset Status Hari Ini** dengan dialog konfirmasi.
-   - Lini masa status 3 tahap (`09.00`, `15.00`, `20.30 WIB`: `Terkirim`, `Menunggu`, `Dibatalkan`, atau `Dijeda`).
-   - Pengiriman pengingat manual (opsi catatan tambahan, checkbox `.ics`, dan pengaman `forceSend` bila hari ini sudah absen).
-   - Sakelar **Mode Jeda Bot (Pause)** beserta catatan jeda opsional dan daftar 15 log aktivitas terakhir.
 4. **Generator Undangan Itinerary Date & Acara Teman:**
-   - **Mode Date Itinerary:** Penerima terkunci otomatis ke `PARTNER_EMAIL` di sisi server.
+   - **Mode Date Itinerary:** Penerima otomatis mengikuti penerima aktif terbaru dari server.
    - **Mode Acara / Hangout Teman:** Pemilih kontak tersimpan dengan filter grup dan pilih semua per grup, input chip email manual, modal CRUD **Kelola Kontak** di Redis, maksimal 30 penerima unik dalam satu transaksi SMTP.
    - Mendukung acara tunggal maupun multi-sesi (otomatis salin tanggal dan saran jam berikutnya, pindah urutan naik/turun, dukungan lintas tengah malam `+1 hari`), pilihan alarm (`15`, `30`, `60` menit), pilihan 1 file `.ics` gabungan atau file `.ics` terpisah per sesi, serta pratinjau timeline sebelum dikirim.
 
@@ -27,7 +28,7 @@ Aplikasi web full-stack dan sistem otomasi latar belakang untuk **Pengingat Abse
 - **Framework:** Next.js App Router, React 19, TypeScript (`strict: true`), Tailwind CSS v4, Zod, Lucide React
 - **Storage:** Upstash Redis via `@upstash/redis` (REST API saja)
 - **Email & Kalender:** Nodemailer via Gmail SMTP (`smtp.gmail.com`, port `465`, `secure: true`) dengan payload MIME berlapis (`text/plain`, `text/html`, inline `text/calendar; charset="utf-8"; method=REQUEST`, dan lampiran `.ics`)
-- **Scheduler:** GitHub Actions Cron Job
+- **Scheduler:** GitHub Actions Cron Job (`0,30 * * * *`) atau alternatif gratis `cron-job.org`
 
 ---
 
@@ -68,7 +69,7 @@ node scripts/generate-secrets.mjs 123456
 Skrip akan mencetak 4 variabel berikut:
 - `APP_PIN_HASH` (hash SHA-256 dari PIN Anda)
 - `SESSION_SECRET` (64 karakter hex acak untuk tanda tangan session cookie)
-- `CRON_SECRET` (64 karakter hex acak untuk autentikasi GitHub Actions Cron)
+- `CRON_SECRET` (64 karakter hex acak untuk autentikasi endpoint cron)
 - `HMAC_SECRET` (64 karakter hex acak untuk tanda tangan tautan `/confirm`)
 
 ### 4. Konfigurasi Environment Lokal
@@ -86,9 +87,9 @@ Daftar lengkap variabel server:
 | `GMAIL_USER` | Alamat Gmail pengirim |
 | `GMAIL_APP_PASSWORD` | App Password 16 karakter Gmail |
 | `SENDER_NAME` | Nama tampil pengirim pada email dan properti `ORGANIZER` ICS |
-| `PARTNER_EMAIL` | Email penerima pengingat harian dan mode Date Itinerary |
-| `PARTNER_NAME` | Nama panggilan penerima utama |
-| `MY_EMAIL` | Email Anda untuk menerima notifikasi eskalasi pukul 20.30 WIB |
+| `PARTNER_EMAIL` | Email penerima bawaan (fallback bila belum diubah dari dashboard) |
+| `PARTNER_NAME` | Nama panggilan penerima bawaan |
+| `MY_EMAIL` | Email Anda untuk menerima notifikasi eskalasi urgent |
 | `UPSTASH_REDIS_REST_URL` | Endpoint REST Upstash Redis |
 | `UPSTASH_REDIS_REST_TOKEN` | Token REST Upstash Redis |
 | `APP_PIN_HASH` | Hash SHA-256 hex (64 karakter) dari PIN dashboard |
@@ -107,26 +108,44 @@ Buka `http://localhost:3000`. Anda akan diarahkan ke `/login` untuk memasukkan P
 
 ### 5. Deploy ke Vercel Hobby
 
-1. Push repositori ini ke GitHub.
-2. Buka [vercel.com](https://vercel.com), klik **Add New Project**, lalu impor repositori GitHub tersebut.
+1. Push repositori ini ke GitHub (atau deploy langsung via Vercel CLI).
+2. Buka [vercel.com](https://vercel.com), klik **Add New Project**, lalu impor proyek ini.
 3. Pada menu **Settings > Environment Variables**, tambahkan seluruh 13 variabel di atas (pastikan `APP_URL` diisi domain produksi Vercel Anda, tanpa garis miring di akhir).
 4. Klik **Deploy**.
 
-### 6. Konfigurasi GitHub Actions Secrets
+### 6. Konfigurasi Scheduler Otomatis (Pilih Salah Satu)
 
-Agar cron otomatis `09.00`, `15.00`, dan `20.30 WIB` berjalan:
-
+#### Opsi A: GitHub Actions Cron (Direkomendasikan jika memakai GitHub)
 1. Buka repositori GitHub Anda, lalu masuk ke **Settings > Secrets and variables > Actions**.
 2. Tambahkan 2 **Repository Secrets**:
    - `APP_URL`: URL produksi Vercel Anda (contoh: `https://pengingat-jadwal.vercel.app`)
    - `CRON_SECRET`: nilai yang persis sama dengan `CRON_SECRET` di Vercel Environment Variables.
-3. Buka tab **Actions** dan pastikan workflow `Daily Attendance Reminder Cron` serta `Keep GitHub Actions Active` dalam keadaan aktif.
+3. Buka tab **Actions** dan pastikan workflow `Daily Attendance Reminder Cron` (jadwal `0,30 * * * *`, memanggil `{"stage":"auto"}`) serta `Keep GitHub Actions Active` dalam keadaan aktif.
+
+#### Opsi B: cron-job.org (Alternatif Gratis Tanpa GitHub Actions)
+Jika Anda deploy ke Vercel tanpa GitHub atau menginginkan pemicu cron yang lebih presisi setiap 30 menit:
+
+1. Buat akun gratis di [cron-job.org](https://cron-job.org), lalu klik **Create cronjob**.
+2. Isi konfigurasi dasar:
+   - **Title:** `Pengingat Absen Smart Dispatcher`
+   - **URL:** `https://<domain-vercel-anda>/api/cron/attendance`
+   - **Execution schedule:** pilih **Custom**, atur **Minutes** ke `0, 30` (setiap 30 menit sepanjang hari), Hours/Days/Months `*`.
+3. Buka tab **Advanced**:
+   - **Request method:** `POST`
+   - **Headers:** tambahkan dua header berikut:
+     - `Authorization`: `Bearer <CRON_SECRET_ANDA>`
+     - `Content-Type`: `application/json`
+   - **Request body:**
+     ```json
+     {"stage":"auto"}
+     ```
+4. Klik **Test Run** untuk memastikan server membalas HTTP `200`, lalu klik **Create**.
 
 ---
 
 ## Langkah Verifikasi & Pengujian
 
-### A. Verifikasi Lokal (TypeScript, Timezone WIB -> UTC, RFC 5545 ICS, Production Build)
+### A. Verifikasi Lokal (TypeScript, Timezone WIB -> UTC, RFC 5545 ICS, Smart Dispatcher, Build)
 
 ```bash
 npx tsc --noEmit
@@ -139,27 +158,24 @@ npm run build
 1. **Uji Login & Rate Limit:**
    - Buka `${APP_URL}`: pastikan langsung dialihkan ke `/login`.
    - Masukkan PIN yang benar: pastikan masuk ke dashboard 2 tab.
-2. **Uji Cron Tahap Pagi (`morning`) via GitHub Actions:**
-   - Buka tab **Actions > Daily Attendance Reminder Cron > Run workflow**.
-   - Pilih `stage: morning` lalu jalankan.
-   - Pastikan langkah `Call attendance cron endpoint` selesai dengan HTTP 200.
-   - Cek inbox `PARTNER_EMAIL`: email memuat kartu undangan kalender inline + lampiran `.ics` + tombol **Konfirmasi: Saya Sudah Absen** + tombol **Tambah Manual ke Google Calendar**.
-   - **Catatan penerima pertama kali:** jika jadwal belum otomatis muncul di Google Calendar, klik tombol **"I know the sender"** (Saya mengenal pengirim) di bagian atas email Gmail.
-3. **Uji Idempotency Lock:**
-   - Jalankan lagi `stage: morning` pada hari yang sama. Respons harus `skipped: true` dengan alasan `already_sent` dan tidak mengirim email ganda.
-4. **Uji Konfirmasi Anti-Scanner (`/confirm`):**
-   - Buka tautan konfirmasi dari email: pastikan hanya membuka halaman konfirmasi tanpa langsung mengubah status di dashboard.
-   - Tekan tombol **Konfirmasi: Saya Sudah Absen**: status langsung berubah menjadi terkonfirmasi.
-   - Uji `stage: afternoon` setelah konfirmasi: respons harus `skipped: true` dengan alasan `already_confirmed`.
-5. **Uji Eskalasi 20.30 WIB (`urgent`):**
-   - Reset status hari ini di dashboard (centang reset penanda terkirim bila perlu), lalu jalankan `stage: urgent` via `workflow_dispatch` atau `curl`:
+2. **Uji Smart Dispatcher (`auto`) & Tahap Manual (`morning`/`afternoon`/`urgent`):**
+   - Jalankan `POST ${APP_URL}/api/cron/attendance` dengan `{"stage":"auto"}` di luar jendela jam kirim: pastikan respons HTTP `200` dengan `status: "skipped_not_due"` dan tidak menambah entri sampah ke Log Aktivitas.
+   - Uji kirim tahap pagi secara langsung lewat GitHub Actions **Run workflow** (`stage: morning`) atau `curl`:
    ```bash
    curl --fail-with-body -X POST "${APP_URL}/api/cron/attendance" \
      -H "Authorization: Bearer ${CRON_SECRET}" \
      -H "Content-Type: application/json" \
-     -d '{"stage":"urgent"}'
+     -d '{"stage":"morning"}'
    ```
-   - Pastikan `PARTNER_EMAIL` menerima peringatan urgent dan `MY_EMAIL` menerima email eskalasi secara bersamaan.
-6. **Uji Generator Itinerary Multi-Sesi & Lintas Tengah Malam:**
-   - Buka tab **Undangan & Itinerary**, coba mode **Date Itinerary** dan mode **Acara / Hangout Teman**.
-   - Buat 2 sesi (misalnya Sesi 1 `20:00-22:30`, Sesi 2 `22:30-01:00` yang otomatis terdeteksi `+1 hari`), lalu kirim dengan mode 1 file `.ics` gabungan maupun file terpisah per sesi dan pastikan Google Calendar membaca jam WIB secara akurat.
+   - Cek inbox penerima aktif: email menyapa dengan nama pasangan, menampilkan pesan khusus (jika aktif), memuat kartu undangan kalender `.ics` sesuai jam pagi yang diatur di dashboard + tombol **Konfirmasi: Saya Sudah Absen** + tombol **Tambah Manual ke Google Calendar**.
+   - **Catatan penerima pertama kali:** jika jadwal belum otomatis muncul di Google Calendar, klik tombol **"I know the sender"** (Saya mengenal pengirim) di bagian atas email Gmail.
+3. **Uji Idempotency Lock & Konfirmasi Anti-Scanner (`/confirm`):**
+   - Jalankan lagi `stage: morning` pada hari yang sama: respons harus `status: "skipped_duplicate"` tanpa mengirim email ganda.
+   - Buka tautan `/confirm` dari email: pastikan hanya membuka halaman konfirmasi (read-only) tanpa mengubah status.
+   - Tekan **Konfirmasi: Saya Sudah Absen**: status berubah menjadi terkonfirmasi, dan pengecekan `stage: afternoon` setelahnya mengembalikan `status: "skipped_confirmed"`.
+4. **Uji Jadwal Libur (Off-Days) & Jam Fleksibel:**
+   - Klik **Liburkan Hari Ini** di dashboard: Hero Card menampilkan **Hari Ini Libur (Bot Tidak Mengirim)**, lini masa menampilkan status `Libur`, dan pemanggilan cron mengembalikan `status: "skipped_off_day"`.
+   - Ubah jam kirim di **Pengaturan Jam Kirim Fleksibel** dan pastikan lini masa langsung memperbarui jam WIB aktual.
+5. **Uji Eskalasi Urgent & Generator Itinerary:**
+   - Reset status hari ini, batalkan libur, lalu jalankan `stage: urgent` untuk memastikan penerima aktif dan `MY_EMAIL` menerima email paralel.
+   - Buka tab **Undangan & Itinerary**, pastikan mode **Date Itinerary** otomatis menampilkan penerima aktif terbaru dari Tab 1, lalu uji kirim single/multi-sesi lintas tengah malam.

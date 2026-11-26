@@ -103,10 +103,11 @@ function renderEmailShell(params: {
 export function buildAttendanceReminderEmail(params: {
   stage: AttendanceStage | "manual";
   dateWib: string;
-  partnerName: string;
+  recipientName: string;
   senderName: string;
   confirmUrl: string;
-  note?: string;
+  customMessage?: string | null;
+  scheduledTimeWib?: string;
   calendarSlot?: {
     startTime: string;
     endTime: string;
@@ -117,48 +118,62 @@ export function buildAttendanceReminderEmail(params: {
 }): EmailContent {
   const dateLong = formatWibDateIndonesian(params.dateWib);
   const dateShort = formatWibDateShortIndonesian(params.dateWib);
+  const recipientName = params.recipientName.trim();
+  const cleanCustomMessage = params.customMessage?.trim() || null;
+
+  const defaultTimeByStage: Record<AttendanceStage | "manual", string> = {
+    morning: "09.00 WIB",
+    afternoon: "15.00 WIB",
+    urgent: "20.30 WIB",
+    manual: "",
+  };
+  const timeLabel = params.scheduledTimeWib?.trim() || defaultTimeByStage[params.stage];
 
   const stageCopy: Record<
     AttendanceStage | "manual",
     { label: string; subject: string; heading: string; intro: string; accent: string }
   > = {
     morning: {
-      label: "Pengingat Absen Pagi (09.00 WIB)",
-      subject: `[Absen Pagi] Pengingat Absen, ${dateShort}`,
-      heading: `Selamat pagi, ${params.partnerName}`,
-      intro: `Pengingat rutin untuk melakukan absen hari ini (${dateLong}). Jika sudah absen, tekan tombol konfirmasi di bawah agar pengingat sore dan malam hari ini otomatis dibatalkan.`,
+      label: `Pengingat Absen Pagi (${timeLabel})`,
+      subject: `[Absen Pagi] Halo ${recipientName}, pengingat absen ${dateShort}`,
+      heading: `Pagi, ${recipientName}!`,
+      intro: `Pengingat rutin untuk melakukan absen hari ini (${dateLong}). Jika sudah absen, tekan tombol konfirmasi di bawah agar pengingat lanjutan hari ini otomatis dibatalkan.`,
       accent: "#B4431D",
     },
     afternoon: {
-      label: "Pengecekan Absen Sore (15.00 WIB)",
-      subject: `[Cek Sore] Konfirmasi Absen Hari Ini, ${dateShort}`,
-      heading: `Halo ${params.partnerName}, sudah absen hari ini?`,
-      intro: `Sampai pukul 15.00 WIB, status absen untuk ${dateLong} belum tercatat terkonfirmasi. Jika sudah absen, tekan tombol di bawah supaya peringatan malam pukul 20.30 WIB tidak perlu terkirim.`,
+      label: `Pengecekan Absen Sore (${timeLabel})`,
+      subject: `[Cek Sore] Halo ${recipientName}, sudah absen hari ini? (${dateShort})`,
+      heading: `Halo ${recipientName}, sudah absen hari ini?`,
+      intro: `Sampai pukul ${timeLabel}, status absen untuk ${dateLong} belum tercatat terkonfirmasi. Jika sudah absen, tekan tombol di bawah supaya peringatan urgent hari ini tidak perlu terkirim.`,
       accent: "#B45309",
     },
     urgent: {
-      label: "Peringatan Urgent (20.30 WIB)",
-      subject: `[URGENT] Belum Konfirmasi Absen, ${dateShort}`,
-      heading: `Segera cek absen hari ini, ${params.partnerName}`,
-      intro: `Sudah pukul 20.30 WIB dan konfirmasi absen untuk ${dateLong} belum masuk. Mohon segera pastikan absen sudah dilakukan lalu tekan tombol konfirmasi di bawah.`,
+      label: `Peringatan Urgent (${timeLabel})`,
+      subject: `[URGENT] ${recipientName}, belum konfirmasi absen ${dateShort}`,
+      heading: `Halo ${recipientName}, segera cek absen hari ini`,
+      intro: `Sudah pukul ${timeLabel} dan konfirmasi absen untuk ${dateLong} belum masuk. Mohon segera pastikan absen sudah dilakukan lalu tekan tombol konfirmasi di bawah.`,
       accent: "#B91C1C",
     },
     manual: {
       label: "Pengingat Absen Manual",
-      subject: `[Pengingat Absen] ${dateShort}`,
-      heading: `Halo ${params.partnerName}, pengingat absen hari ini`,
-      intro: `Ini adalah pengingat manual untuk absen tanggal ${dateLong}. Setelah absen selesai, klik tombol di bawah untuk mencatat konfirmasi.`,
+      subject: `[Pengingat Absen] Halo ${recipientName} (${dateShort})`,
+      heading: `Halo ${recipientName}, pengingat absen hari ini`,
+      intro: `Ini adalah pengingat untuk absen tanggal ${dateLong}. Setelah absen selesai, tekan tombol di bawah untuk mencatat konfirmasi.`,
       accent: "#B4431D",
     },
   };
 
   const copy = stageCopy[params.stage];
-  const noteBlockHtml = params.note
-    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;background-color:#FAF8F4;border-left:3px solid ${copy.accent};border-radius:4px;">
+  const customMessageHtml = cleanCustomMessage
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0;background-color:#FDF2ED;border:1px solid #F2D2C4;border-left:4px solid ${copy.accent};border-radius:8px;">
         <tr>
-          <td style="padding:12px 16px;font-size:14px;color:#292524;">
-            <div style="font-size:12px;font-weight:600;color:#57534E;margin-bottom:4px;">Catatan tambahan:</div>
-            ${formatMultilineHtml(params.note)}
+          <td style="padding:14px 16px;font-size:14px;line-height:1.6;color:#292524;">
+            <div style="font-size:11px;font-weight:700;letter-spacing:0.03em;color:${copy.accent};margin-bottom:6px;">
+              PESAN KHUSUS UNTUK ${escapeHtml(recipientName.toUpperCase())}
+            </div>
+            <div style="font-style:italic;color:#1C1917;">
+              &ldquo;${formatMultilineHtml(cleanCustomMessage)}&rdquo;
+            </div>
           </td>
         </tr>
       </table>`
@@ -169,7 +184,13 @@ export function buildAttendanceReminderEmail(params: {
         title: params.calendarSlot.summary,
         dtStartUtc: params.calendarSlot.dtStartUtc,
         dtEndUtc: params.calendarSlot.dtEndUtc,
-        description: `Pengingat absen harian untuk ${dateLong}. Tautan konfirmasi: ${params.confirmUrl}`,
+        description: [
+          `Pengingat absen harian untuk ${recipientName} (${dateLong}).`,
+          cleanCustomMessage ? `Pesan khusus: ${cleanCustomMessage}` : "",
+          `Tautan konfirmasi: ${params.confirmUrl}`,
+        ]
+          .filter(Boolean)
+          .join("\n"),
       })
     : null;
 
@@ -187,7 +208,7 @@ export function buildAttendanceReminderEmail(params: {
 
   const bodyHtml = `
     <p style="margin:0 0 16px 0;">${escapeHtml(copy.intro)}</p>
-    ${noteBlockHtml}
+    ${customMessageHtml}
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:22px 0 16px 0;">
       <tr>
         <td style="border-radius:8px;background-color:${copy.accent};">
@@ -205,7 +226,9 @@ export function buildAttendanceReminderEmail(params: {
   `;
 
   const html = renderEmailShell({
-    preheader: `${copy.label}: ${dateLong}`,
+    preheader: cleanCustomMessage
+      ? `${copy.heading} ${cleanCustomMessage}`
+      : `${copy.label}: ${dateLong}`,
     label: copy.label,
     heading: copy.heading,
     accentColor: copy.accent,
@@ -220,7 +243,7 @@ export function buildAttendanceReminderEmail(params: {
     copy.heading,
     "",
     copy.intro,
-    ...(params.note ? ["", `Catatan tambahan: ${params.note}`] : []),
+    ...(cleanCustomMessage ? ["", `Pesan khusus untuk ${recipientName}:`, `"${cleanCustomMessage}"`] : []),
     "",
     `Konfirmasi Saya Sudah Absen: ${params.confirmUrl}`,
     ...(googleCalendarUrl && params.calendarSlot
@@ -245,24 +268,27 @@ export function buildAttendanceReminderEmail(params: {
 
 export function buildEscalationEmail(params: {
   dateWib: string;
-  partnerName: string;
-  partnerEmail: string;
+  recipientName: string;
+  recipientEmail: string;
   senderName: string;
   dashboardUrl: string;
   confirmUrl: string;
+  scheduledTimeWib?: string;
 }): EmailContent {
   const dateLong = formatWibDateIndonesian(params.dateWib);
   const dateShort = formatWibDateShortIndonesian(params.dateWib);
+  const recipientName = params.recipientName.trim();
+  const timeLabel = params.scheduledTimeWib?.trim() || "20.30 WIB";
 
-  const subject = `[Eskalasi 20.30 WIB] ${params.partnerName} belum konfirmasi absen (${dateShort})`;
-  const heading = `${params.partnerName} belum konfirmasi absen hari ini`;
+  const subject = `[Eskalasi ${timeLabel}] Absen ${recipientName} hari ini belum dikonfirmasi (${dateShort})`;
+  const heading = `Absen ${recipientName} hari ini belum dikonfirmasi`;
 
   const bodyHtml = `
     <p style="margin:0 0 14px 0;">
-      Hingga jadwal eskalasi <strong>20.30 WIB</strong> pada <strong>${escapeHtml(dateLong)}</strong>, sistem belum menerima konfirmasi absen dari <strong>${escapeHtml(params.partnerName)}</strong> (${escapeHtml(params.partnerEmail)}).
+      Hingga jadwal eskalasi <strong>${escapeHtml(timeLabel)}</strong> pada <strong>${escapeHtml(dateLong)}</strong>, sistem belum menerima konfirmasi absen dari <strong>${escapeHtml(recipientName)}</strong> (${escapeHtml(params.recipientEmail)}).
     </p>
     <p style="margin:0 0 20px 0;">
-      Email peringatan urgent sudah dikirim ke ${escapeHtml(params.partnerName)}. Anda dapat menghubungi langsung untuk memastikan absen hari ini tidak terlewat, atau memeriksa status di dashboard.
+      Email peringatan urgent sudah dikirim ke ${escapeHtml(recipientName)}. Anda dapat menghubungi langsung untuk memastikan absen hari ini tidak terlewat, atau memeriksa status di dashboard.
     </p>
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 16px 0;">
       <tr>
@@ -279,8 +305,8 @@ export function buildEscalationEmail(params: {
   `;
 
   const html = renderEmailShell({
-    preheader: `Eskalasi 20.30 WIB: ${params.partnerName} belum konfirmasi absen ${dateShort}`,
-    label: "Notifikasi Eskalasi Absen (20.30 WIB)",
+    preheader: `Eskalasi ${timeLabel}: Absen ${recipientName} hari ini belum dikonfirmasi (${dateShort})`,
+    label: `Notifikasi Eskalasi Absen (${timeLabel})`,
     heading,
     accentColor: "#B91C1C",
     bodyHtml,
@@ -289,12 +315,12 @@ export function buildEscalationEmail(params: {
   });
 
   const text = [
-    "Notifikasi Eskalasi Absen (20.30 WIB)",
+    `Notifikasi Eskalasi Absen (${timeLabel})`,
     "",
     heading,
     "",
-    `Hingga 20.30 WIB (${dateLong}), belum ada konfirmasi absen dari ${params.partnerName} (${params.partnerEmail}).`,
-    `Email peringatan urgent telah dikirimkan ke ${params.partnerName}.`,
+    `Hingga ${timeLabel} (${dateLong}), belum ada konfirmasi absen dari ${recipientName} (${params.recipientEmail}).`,
+    `Email peringatan urgent telah dikirimkan ke ${recipientName}.`,
     "",
     `Buka Dashboard: ${params.dashboardUrl}`,
     `Tautan Konfirmasi: ${params.confirmUrl}`,

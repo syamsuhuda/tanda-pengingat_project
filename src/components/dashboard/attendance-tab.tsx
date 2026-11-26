@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import {
   AlertCircle,
   Ban,
+  BellOff,
+  CalendarOff,
   Check,
   CheckCircle2,
   Clock,
@@ -13,8 +15,13 @@ import {
   Send,
 } from "lucide-react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { formatIsoToWibDateTime, formatIsoToWibTime } from "@/lib/timezone";
+import { CustomMessageCard } from "@/components/dashboard/custom-message-card";
+import { OffDaysCard } from "@/components/dashboard/off-days-card";
+import { RecipientCard } from "@/components/dashboard/recipient-card";
+import { ScheduleCard } from "@/components/dashboard/schedule-card";
+import { formatHmTimeWibLabel, formatIsoToWibDateTime, formatIsoToWibTime } from "@/lib/timezone";
 import type {
+  ActiveRecipientConfig,
   ActivityLogEntry,
   DashboardStatusData,
   TimelineStageStatus,
@@ -23,6 +30,7 @@ import type {
 interface AttendanceTabProps {
   data: DashboardStatusData;
   onRefresh: () => Promise<void>;
+  onRecipientUpdated: (next: ActiveRecipientConfig) => Promise<void>;
 }
 
 const TIMELINE_META: Record<
@@ -49,6 +57,16 @@ const TIMELINE_META: Record<
     className:
       "border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-fg)]",
   },
+  off_day: {
+    label: "Libur",
+    className:
+      "border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-fg)]",
+  },
+  disabled: {
+    label: "Nonaktif",
+    className:
+      "border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--ink-muted)]",
+  },
 };
 
 const LOG_RESULT_META: Record<
@@ -73,8 +91,13 @@ const LOG_RESULT_META: Record<
   },
 };
 
-export function AttendanceTab({ data, onRefresh }: AttendanceTabProps) {
-  const [note, setNote] = useState("");
+export function AttendanceTab({
+  data,
+  onRefresh,
+  onRecipientUpdated,
+}: AttendanceTabProps) {
+  const [manualNote, setManualNote] = useState(data.customMessage?.message ?? "");
+  const [manualNoteTouched, setManualNoteTouched] = useState(false);
   const [includeIcs, setIncludeIcs] = useState(true);
   const [sendingManual, setSendingManual] = useState(false);
   const [manualFeedback, setManualFeedback] = useState<{
@@ -87,6 +110,7 @@ export function AttendanceTab({ data, onRefresh }: AttendanceTabProps) {
   const [clearSentLocks, setClearSentLocks] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [confirmingManual, setConfirmingManual] = useState(false);
+  const [cancellingTodayOff, setCancellingTodayOff] = useState(false);
   const [statusFeedback, setStatusFeedback] = useState<{
     type: "success" | "error";
     text: string;
@@ -105,7 +129,18 @@ export function AttendanceTab({ data, onRefresh }: AttendanceTabProps) {
     setPauseNote(data.pauseConfig.note ?? "");
   }, [data.pauseConfig.paused, data.pauseConfig.note]);
 
+  useEffect(() => {
+    if (!manualNoteTouched) {
+      setManualNote(data.customMessage?.message ?? "");
+    }
+  }, [data.customMessage?.message, manualNoteTouched]);
+
   const isConfirmed = data.attendance !== null;
+  const isTodayOff = data.todayOffDay.isOff;
+  const activeStageTimesText = (["morning", "afternoon", "urgent"] as const)
+    .filter((stage) => data.schedule[stage].enabled)
+    .map((stage) => formatHmTimeWibLabel(data.schedule[stage].time))
+    .join(", ");
 
   async function executeManualTrigger(forceSend: boolean) {
     setSendingManual(true);
@@ -116,7 +151,8 @@ export function AttendanceTab({ data, onRefresh }: AttendanceTabProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          note: note.trim() || undefined,
+          customNote: manualNote.trim() || undefined,
+          useActiveMessage: false,
           includeIcs,
           forceSend,
         }),
@@ -144,7 +180,6 @@ export function AttendanceTab({ data, onRefresh }: AttendanceTabProps) {
       }
 
       setForceDialogOpen(false);
-      setNote("");
       setManualFeedback({
         type: "success",
         text: body.message ?? "Pengingat manual berhasil dikirim.",
@@ -201,6 +236,40 @@ export function AttendanceTab({ data, onRefresh }: AttendanceTabProps) {
       });
     } finally {
       setConfirmingManual(false);
+    }
+  }
+
+  async function handleCancelTodayOffDay() {
+    setCancellingTodayOff(true);
+    setStatusFeedback(null);
+
+    try {
+      const response = await fetch(
+        `/api/attendance/off-days?date=${encodeURIComponent(data.todayWib)}`,
+        { method: "DELETE" },
+      );
+
+      const body = (await response.json()) as { ok: boolean; message?: string };
+      if (!response.ok || !body.ok) {
+        setStatusFeedback({
+          type: "error",
+          text: body.message ?? "Gagal membatalkan libur hari ini.",
+        });
+        return;
+      }
+
+      setStatusFeedback({
+        type: "success",
+        text: body.message ?? "Status libur hari ini dibatalkan.",
+      });
+      await onRefresh();
+    } catch {
+      setStatusFeedback({
+        type: "error",
+        text: "Koneksi gagal saat membatalkan libur hari ini.",
+      });
+    } finally {
+      setCancellingTodayOff(false);
     }
   }
 
@@ -287,7 +356,11 @@ export function AttendanceTab({ data, onRefresh }: AttendanceTabProps) {
         <div className="space-y-6 lg:col-span-7">
           <section
             aria-labelledby="today-status-heading"
-            className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 sm:p-7"
+            className={`rounded-xl border bg-[var(--surface)] p-5 sm:p-7 ${
+              isTodayOff && !isConfirmed
+                ? "border-[var(--warning-border)]"
+                : "border-[var(--border-subtle)]"
+            }`}
           >
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
@@ -301,6 +374,12 @@ export function AttendanceTab({ data, onRefresh }: AttendanceTabProps) {
                       strokeWidth={1.75}
                       aria-hidden="true"
                     />
+                  ) : isTodayOff ? (
+                    <CalendarOff
+                      className="h-8 w-8 shrink-0 text-[var(--warning-fg)]"
+                      strokeWidth={1.75}
+                      aria-hidden="true"
+                    />
                   ) : (
                     <Clock
                       className="h-8 w-8 shrink-0 text-[var(--accent)]"
@@ -310,9 +389,13 @@ export function AttendanceTab({ data, onRefresh }: AttendanceTabProps) {
                   )}
                   <h1
                     id="today-status-heading"
-                    className="font-display text-3xl font-semibold tracking-tight text-[var(--ink)] sm:text-4xl"
+                    className="font-display text-2xl font-semibold tracking-tight text-[var(--ink)] sm:text-3xl"
                   >
-                    {isConfirmed ? "Sudah Absen" : "Belum Absen"}
+                    {isConfirmed
+                      ? "Sudah Absen"
+                      : isTodayOff
+                        ? "Hari Ini Libur (Bot Tidak Mengirim)"
+                        : "Belum Absen"}
                   </h1>
                 </div>
               </div>
@@ -321,14 +404,22 @@ export function AttendanceTab({ data, onRefresh }: AttendanceTabProps) {
                 className={`inline-flex items-center rounded-md border px-3 py-1.5 text-xs font-semibold ${
                   isConfirmed
                     ? "border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-fg)]"
-                    : "border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--ink)]"
+                    : isTodayOff
+                      ? "border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-fg)]"
+                      : "border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--ink)]"
                 }`}
               >
-                Penerima: {data.partnerName}
+                Penerima: {data.recipient.name}
               </span>
             </div>
 
-            <div className="mt-4 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--ink-muted)]">
+            <div
+              className={`mt-4 rounded-lg border px-4 py-3 text-sm ${
+                isTodayOff && !isConfirmed
+                  ? "border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-fg)]"
+                  : "border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--ink-muted)]"
+              }`}
+            >
               {data.attendance ? (
                 <p className="text-[var(--ink)]">
                   Dikonfirmasi pukul{" "}
@@ -341,13 +432,23 @@ export function AttendanceTab({ data, onRefresh }: AttendanceTabProps) {
                     : "via konfirmasi manual dashboard"}
                   ). Jadwal pengingat berikutnya hari ini otomatis dibatalkan.
                 </p>
+              ) : isTodayOff ? (
+                <p>
+                  Pengingat otomatis untuk{" "}
+                  <strong className="font-mono-num">{data.todayWib}</strong> dilewati karena hari ini masuk daftar libur
+                  {data.todayOffDay.note ? ` (${data.todayOffDay.note})` : ""}.
+                </p>
               ) : (
                 <p>
                   Belum ada konfirmasi untuk tanggal{" "}
                   <span className="font-mono-num font-medium text-[var(--ink)]">
                     {data.todayWib}
                   </span>
-                  . Pengingat otomatis berjalan pada 09.00, 15.00, dan 20.30 WIB kecuali Mode Jeda aktif.
+                  . Pengingat otomatis berjalan pada{" "}
+                  <span className="font-mono-num font-medium text-[var(--ink)]">
+                    {activeStageTimesText || "jadwal aktif"}
+                  </span>{" "}
+                  kecuali Mode Jeda atau Libur aktif.
                 </p>
               )}
             </div>
@@ -371,12 +472,30 @@ export function AttendanceTab({ data, onRefresh }: AttendanceTabProps) {
             ) : null}
 
             <div className="mt-5 flex flex-wrap gap-2.5">
+              {isTodayOff && !isConfirmed ? (
+                <button
+                  type="button"
+                  onClick={() => void handleCancelTodayOffDay()}
+                  disabled={cancellingTodayOff}
+                  className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent-fg)] transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-60"
+                >
+                  <CalendarOff className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                  <span>
+                    {cancellingTodayOff ? "Membatalkan..." : "Batalkan Libur Hari Ini"}
+                  </span>
+                </button>
+              ) : null}
+
               {!isConfirmed ? (
                 <button
                   type="button"
-                  onClick={handleManualConfirmToday}
+                  onClick={() => void handleManualConfirmToday()}
                   disabled={confirmingManual}
-                  className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent-fg)] transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-60"
+                  className={`inline-flex min-h-[44px] items-center gap-2 rounded-lg px-4 text-sm font-semibold transition-colors disabled:opacity-60 ${
+                    isTodayOff
+                      ? "border border-[var(--border-control)] bg-[var(--surface)] text-[var(--ink)] hover:bg-[var(--surface-muted)]"
+                      : "bg-[var(--accent)] text-[var(--accent-fg)] hover:bg-[var(--accent-hover)]"
+                  }`}
                 >
                   <CheckCircle2 className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                   <span>{confirmingManual ? "Menyimpan..." : "Tandai Sudah Absen"}</span>
@@ -443,6 +562,10 @@ export function AttendanceTab({ data, onRefresh }: AttendanceTabProps) {
                         <Check className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
                       ) : item.status === "paused" ? (
                         <PauseCircle className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                      ) : item.status === "off_day" ? (
+                        <CalendarOff className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                      ) : item.status === "disabled" ? (
+                        <BellOff className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
                       ) : item.status === "cancelled" ? (
                         <Ban className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
                       ) : (
@@ -456,6 +579,14 @@ export function AttendanceTab({ data, onRefresh }: AttendanceTabProps) {
             </ol>
           </section>
 
+          <ScheduleCard schedule={data.schedule} onChanged={onRefresh} />
+
+          <CustomMessageCard
+            customMessage={data.customMessage}
+            recipientName={data.recipient.name}
+            onChanged={onRefresh}
+          />
+
           <section
             aria-labelledby="manual-send-heading"
             className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 sm:p-6"
@@ -467,26 +598,48 @@ export function AttendanceTab({ data, onRefresh }: AttendanceTabProps) {
               Kirim Pengingat Sekarang
             </h2>
             <p className="mt-1 text-sm text-[var(--ink-muted)]">
-              Kirim email pengingat manual ke {data.partnerName} ({data.partnerEmail}) lengkap dengan tautan konfirmasi hari ini.
+              Kirim email pengingat manual ke {data.recipient.name} ({data.recipient.email}) lengkap dengan tautan konfirmasi hari ini.
             </p>
 
             <form onSubmit={handleTriggerSubmit} className="mt-4 space-y-4">
               <div>
-                <label
-                  htmlFor="manual-reminder-note"
-                  className="block text-sm font-semibold text-[var(--ink)]"
-                >
-                  Catatan tambahan (opsional)
-                </label>
+                <div className="flex items-center justify-between gap-2">
+                  <label
+                    htmlFor="manual-reminder-note"
+                    className="block text-sm font-semibold text-[var(--ink)]"
+                  >
+                    Pesan / catatan untuk kiriman ini (opsional)
+                  </label>
+                  {manualNote ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setManualNote("");
+                        setManualNoteTouched(true);
+                      }}
+                      className="text-xs font-semibold text-[var(--ink-muted)] hover:text-[var(--ink)] hover:underline"
+                    >
+                      Kosongkan
+                    </button>
+                  ) : null}
+                </div>
                 <textarea
                   id="manual-reminder-note"
                   rows={3}
-                  maxLength={400}
-                  value={note}
-                  onChange={(event) => setNote(event.target.value)}
-                  placeholder="Contoh: Jangan lupa foto absen sebelum rapat jam 10.00."
+                  maxLength={500}
+                  value={manualNote}
+                  onChange={(event) => {
+                    setManualNote(event.target.value);
+                    setManualNoteTouched(true);
+                  }}
+                  placeholder="Contoh: Jangan lupa absen sebelum rapat jam 10.00 ya."
                   className="mt-1.5 w-full rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-3.5 py-2.5 text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
                 />
+                {data.customMessage && !manualNoteTouched ? (
+                  <p className="mt-1 text-xs text-[var(--ink-muted)]">
+                    Diisi otomatis dari pesan khusus aktif. Anda bebas mengedit atau mengosongkannya sebelum mengirim.
+                  </p>
+                ) : null}
               </div>
 
               <label
@@ -538,6 +691,18 @@ export function AttendanceTab({ data, onRefresh }: AttendanceTabProps) {
         </div>
 
         <div className="space-y-6 lg:col-span-5">
+          <RecipientCard
+            recipient={data.recipient}
+            onUpdated={onRecipientUpdated}
+          />
+
+          <OffDaysCard
+            todayWib={data.todayWib}
+            tomorrowWib={data.tomorrowWib}
+            upcomingOffDays={data.upcomingOffDays}
+            onChanged={onRefresh}
+          />
+
           <section
             aria-labelledby="pause-bot-heading"
             className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 sm:p-6"
@@ -551,7 +716,7 @@ export function AttendanceTab({ data, onRefresh }: AttendanceTabProps) {
                   Mode Jeda Bot (Pause)
                 </h2>
                 <p className="mt-1 text-sm text-[var(--ink-muted)]">
-                  Hentikan sementara seluruh pengiriman otomatis 09.00, 15.00, dan 20.30 WIB.
+                  Jeda menyeluruh untuk cuti panjang hingga Anda aktifkan kembali.
                 </p>
               </div>
 
@@ -703,7 +868,7 @@ export function AttendanceTab({ data, onRefresh }: AttendanceTabProps) {
               className="mt-0.5 h-4 w-4 accent-[var(--accent)]"
             />
             <span>
-              Hapus juga penanda tahap terkirim hari ini (09.00, 15.00, 20.30 WIB) agar tahap yang sama dapat dikirim ulang oleh cron.
+              Hapus juga penanda tahap terkirim hari ini ({activeStageTimesText || "semua tahap"}) agar tahap yang sama dapat dikirim ulang oleh cron.
             </span>
           </label>
         }

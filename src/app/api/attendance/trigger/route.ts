@@ -8,7 +8,12 @@ import {
 import { getAppBaseUrl } from "@/lib/env";
 import { sendAttendanceReminder } from "@/lib/mailer";
 import { createAttendanceToken } from "@/lib/security";
-import { appendActivityLog, getAttendanceStatus } from "@/lib/store";
+import {
+  appendActivityLog,
+  getActiveCustomMessage,
+  getActiveRecipient,
+  getAttendanceStatus,
+} from "@/lib/store";
 import { getTodayWibDate } from "@/lib/timezone";
 import { triggerAttendanceSchema } from "@/lib/validators";
 
@@ -26,9 +31,14 @@ export async function POST(request: Request) {
       return parsed.response;
     }
 
-    const { note, includeIcs, forceSend } = parsed.data;
+    const { customNote, note, useActiveMessage, includeIcs, forceSend } = parsed.data;
     const todayWib = getTodayWibDate();
-    const existingStatus = await getAttendanceStatus(todayWib);
+
+    const [existingStatus, recipient, activeCustomMessage] = await Promise.all([
+      getAttendanceStatus(todayWib),
+      getActiveRecipient(),
+      getActiveCustomMessage(todayWib),
+    ]);
 
     if (existingStatus && !forceSend) {
       return jsonError(
@@ -39,6 +49,10 @@ export async function POST(request: Request) {
       );
     }
 
+    const explicitNote = customNote ?? note;
+    const resolvedMessage =
+      explicitNote ?? (useActiveMessage ? activeCustomMessage?.message ?? null : null);
+
     const requestOrigin = new URL(request.url).origin;
     const baseUrl = getAppBaseUrl(requestOrigin);
     const token = createAttendanceToken(todayWib);
@@ -47,18 +61,19 @@ export async function POST(request: Request) {
     const sent = await sendAttendanceReminder({
       stage: "manual",
       dateWib: todayWib,
+      recipient,
       confirmUrl,
       includeIcs,
-      note,
+      customMessage: resolvedMessage,
     });
 
     await appendActivityLog({
       type: "manual_reminder",
-      summary: `Pengingat manual dikirim (${todayWib}${includeIcs ? ", dengan .ics" : ", tanpa .ics"}${forceSend && existingStatus ? ", paksa kirim ulang" : ""}).`,
+      summary: `Pengingat manual dikirim ke ${recipient.name} (${todayWib}${includeIcs ? ", dengan .ics" : ", tanpa .ics"}${forceSend && existingStatus ? ", paksa kirim ulang" : ""}).`,
       result: "success",
     });
 
-    return jsonOk("Pengingat absen manual berhasil dikirim.", {
+    return jsonOk(`Pengingat absen manual berhasil dikirim ke ${recipient.name}.`, {
       dateWib: todayWib,
       includeIcs,
       messageId: sent.messageId,
