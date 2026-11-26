@@ -97,6 +97,9 @@ export interface TimelineStageItem {
 }
 
 export interface DashboardStatusData {
+  unchanged?: false;
+  version: string;
+  serverTimeWib: string;
   todayWib: string;
   tomorrowWib: string;
   todayFormatted: string;
@@ -114,6 +117,15 @@ export interface DashboardStatusData {
   pauseConfig: BotPauseConfig;
   logs: ActivityLogEntry[];
 }
+
+export interface DashboardUnchangedData {
+  unchanged: true;
+  version: string;
+  serverTimeWib: string;
+  todayWib: string;
+}
+
+export type DashboardStatusResponseData = DashboardStatusData | DashboardUnchangedData;
 
 export type ItineraryRecipientMode = "date" | "friends";
 

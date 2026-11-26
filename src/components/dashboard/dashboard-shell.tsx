@@ -1,77 +1,148 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle,
   BellRing,
   CalendarClock,
   CalendarPlus,
+  CheckCircle2,
   LogOut,
   RefreshCw,
+  X,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AttendanceTab } from "@/components/dashboard/attendance-tab";
 import { ItineraryTab } from "@/components/dashboard/itinerary-tab";
-import type {
-  ActiveRecipientConfig,
-  DashboardStatusData,
-  FriendContact,
-} from "@/lib/types";
+import {
+  useLiveDashboardStatus,
+  type ExternalDashboardEvent,
+  type LiveConnectionState,
+} from "@/hooks/useLiveDashboardStatus";
+import type { ActiveRecipientConfig, FriendContact } from "@/lib/types";
 
 type ActiveTab = "attendance" | "itinerary";
+
+interface LiveToastItem {
+  id: string;
+  text: string;
+}
+
+function formatRelativeSync(lastSyncedAt: number | null, nowMs: number): string {
+  if (!lastSyncedAt) return "Menghubungkan...";
+  const diffSec = Math.max(0, Math.floor((nowMs - lastSyncedAt) / 1000));
+  if (diffSec < 5) return "Diperbarui baru saja";
+  if (diffSec < 60) return `Sinkron ${diffSec} dtk lalu`;
+  const diffMin = Math.floor(diffSec / 60);
+  return `Sinkron ${diffMin} mnt lalu`;
+}
+
+const CONNECTION_META: Record<
+  LiveConnectionState,
+  { label: string; dotClass: string; badgeClass: string }
+> = {
+  live: {
+    label: "Live",
+    dotClass: "bg-emerald-500 motion-safe:animate-pulse",
+    badgeClass:
+      "border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-fg)]",
+  },
+  reconnecting: {
+    label: "Menyambung ulang...",
+    dotClass: "bg-amber-500",
+    badgeClass:
+      "border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-fg)]",
+  },
+  offline: {
+    label: "Offline",
+    dotClass: "bg-stone-400",
+    badgeClass:
+      "border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--ink-muted)]",
+  },
+};
 
 export function DashboardShell() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<ActiveTab>("attendance");
-  const [statusData, setStatusData] = useState<DashboardStatusData | null>(null);
   const [contacts, setContacts] = useState<FriendContact[]>([]);
   const [contactGroups, setContactGroups] = useState<string[]>([]);
-  const [loadingStatus, setLoadingStatus] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [statusError, setStatusError] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [toasts, setToasts] = useState<LiveToastItem[]>([]);
+  const [nowTickMs, setNowTickMs] = useState(() => Date.now());
+  const toastTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
-  const loadStatus = useCallback(
-    async (silent = false) => {
-      if (silent) {
-        setRefreshing(true);
-      } else {
-        setLoadingStatus(true);
+  const dismissToast = useCallback((id: string) => {
+    const existingTimer = toastTimersRef.current.get(id);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+      toastTimersRef.current.delete(id);
+    }
+    setToasts((prev) => prev.filter((item) => item.id !== id));
+  }, []);
+
+  const pushToast = useCallback(
+    (text: string) => {
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      setToasts((prev) => [{ id, text }, ...prev].slice(0, 3));
+      const timer = setTimeout(() => {
+        dismissToast(id);
+      }, 6000);
+      toastTimersRef.current.set(id, timer);
+    },
+    [dismissToast],
+  );
+
+  useEffect(() => {
+    const timers = toastTimersRef.current;
+    return () => {
+      for (const timer of timers.values()) {
+        clearTimeout(timer);
       }
-      setStatusError(null);
+      timers.clear();
+    };
+  }, []);
 
-      try {
-        const response = await fetch("/api/dashboard/status", {
-          cache: "no-store",
-        });
+  const handleUnauthorized = useCallback(() => {
+    router.replace("/login");
+  }, [router]);
 
-        if (response.status === 401) {
-          router.replace("/login");
-          return;
-        }
-
-        const body = (await response.json()) as {
-          ok: boolean;
-          message?: string;
-          data?: DashboardStatusData;
-        };
-
-        if (!response.ok || !body.ok || !body.data) {
-          setStatusError(body.message ?? "Gagal memuat status dashboard dari server.");
-          return;
-        }
-
-        setStatusData(body.data);
-      } catch {
-        setStatusError("Tidak dapat terhubung ke server. Periksa koneksi internet lalu coba muat ulang.");
-      } finally {
-        setLoadingStatus(false);
-        setRefreshing(false);
+  const handleExternalEvent = useCallback(
+    (event: ExternalDashboardEvent) => {
+      if (event.kind === "attendance_confirmed") {
+        pushToast(`${event.partnerName} baru saja mengonfirmasi absen hari ini!`);
+      } else if (event.kind === "stage_sent") {
+        pushToast(`${event.label} (${event.scheduledTimeWib}) baru saja terkirim.`);
+      } else if (event.kind === "date_rollover") {
+        pushToast(`Hari berganti ke ${event.newDateFormatted}. Status hari baru dimuat.`);
       }
     },
-    [router],
+    [pushToast],
   );
+
+  const {
+    data: statusData,
+    isInitialLoading,
+    isSyncing,
+    error: statusError,
+    connectionState,
+    lastSyncedAt,
+    triggerRefresh,
+    updateRecipientLocally,
+  } = useLiveDashboardStatus({
+    onUnauthorized: handleUnauthorized,
+    onExternalEvent: handleExternalEvent,
+  });
+
+  useEffect(() => {
+    setNowTickMs(Date.now());
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        setNowTickMs(Date.now());
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [lastSyncedAt]);
 
   const loadContacts = useCallback(async () => {
     try {
@@ -94,24 +165,15 @@ export function DashboardShell() {
   }, [router]);
 
   useEffect(() => {
-    void Promise.all([loadStatus(false), loadContacts()]);
-  }, [loadStatus, loadContacts]);
+    void loadContacts();
+  }, [loadContacts]);
 
   const handleRecipientUpdated = useCallback(
     async (nextRecipient: ActiveRecipientConfig) => {
-      setStatusData((prev) =>
-        prev
-          ? {
-              ...prev,
-              recipient: nextRecipient,
-              partnerName: nextRecipient.name,
-              partnerEmail: nextRecipient.email,
-            }
-          : prev,
-      );
-      await loadStatus(true);
+      updateRecipientLocally(nextRecipient);
+      await triggerRefresh(true, true);
     },
-    [loadStatus],
+    [triggerRefresh, updateRecipientLocally],
   );
 
   async function handleLogout() {
@@ -124,6 +186,9 @@ export function DashboardShell() {
     }
   }
 
+  const connMeta = CONNECTION_META[connectionState];
+  const syncLabel = formatRelativeSync(lastSyncedAt, nowTickMs);
+
   return (
     <div className="min-h-dvh bg-[var(--bg)] text-[var(--ink)]">
       <header className="sticky top-0 z-30 border-b border-[var(--border-subtle)] bg-[var(--surface)]">
@@ -135,15 +200,28 @@ export function DashboardShell() {
               aria-hidden="true"
             />
             <div className="min-w-0">
-              <div className="font-display truncate text-base font-semibold leading-tight text-[var(--ink)] sm:text-lg">
-                Pengingat Jadwal
+              <div className="flex items-center gap-2">
+                <span className="font-display truncate text-base font-semibold leading-tight text-[var(--ink)] sm:text-lg">
+                  Pengingat Jadwal
+                </span>
+                <span
+                  aria-live="polite"
+                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${connMeta.badgeClass}`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`h-2 w-2 rounded-full ${connMeta.dotClass}`}
+                  />
+                  <span>{connMeta.label}</span>
+                </span>
               </div>
               {statusData ? (
                 <p className="font-mono-num truncate text-[11px] text-[var(--ink-muted)]">
                   {statusData.todayFormatted} &middot; {statusData.nowWibTime}
+                  <span className="hidden font-sans md:inline"> &middot; {syncLabel}</span>
                 </p>
               ) : (
-                <p className="text-[11px] text-[var(--ink-muted)]">Zona waktu WIB</p>
+                <p className="text-[11px] text-[var(--ink-muted)]">Zona waktu WIB &middot; {syncLabel}</p>
               )}
             </div>
           </div>
@@ -191,14 +269,14 @@ export function DashboardShell() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => void Promise.all([loadStatus(true), loadContacts()])}
-              disabled={refreshing || loadingStatus}
+              onClick={() => void Promise.all([triggerRefresh(true, true), loadContacts()])}
+              disabled={isSyncing || isInitialLoading}
               aria-label="Muat ulang data dashboard"
-              title="Muat ulang data"
+              title={`Muat ulang (${syncLabel})`}
               className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-[var(--border-control)] bg-[var(--surface)] text-[var(--ink)] transition-colors hover:bg-[var(--surface-muted)] disabled:opacity-50"
             >
               <RefreshCw
-                className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+                className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`}
                 strokeWidth={1.75}
                 aria-hidden="true"
               />
@@ -220,8 +298,38 @@ export function DashboardShell() {
         </div>
       </header>
 
+      {toasts.length > 0 ? (
+        <div
+          aria-live="polite"
+          className="pointer-events-none fixed inset-x-0 top-16 z-40 mx-auto flex max-w-md flex-col gap-2 px-4 sm:inset-x-auto sm:right-6 sm:left-auto sm:px-0"
+        >
+          {toasts.map((toast) => (
+            <div
+              key={toast.id}
+              role="status"
+              className="pointer-events-auto flex items-start gap-2.5 rounded-xl border border-[var(--success-border)] bg-[var(--surface)] px-4 py-3 text-sm font-medium text-[var(--ink)] shadow-lg"
+            >
+              <CheckCircle2
+                className="mt-0.5 h-4 w-4 shrink-0 text-[var(--success-fg)]"
+                strokeWidth={1.75}
+                aria-hidden="true"
+              />
+              <span className="flex-1">{toast.text}</span>
+              <button
+                type="button"
+                onClick={() => dismissToast(toast.id)}
+                aria-label="Tutup notifikasi"
+                className="-mt-1 -mr-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--ink-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--ink)]"
+              >
+                <X className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
       <main className="pb-mobile-nav mx-auto max-w-6xl px-4 pt-6 sm:px-6 sm:pt-8">
-        {loadingStatus && !statusData ? (
+        {isInitialLoading && !statusData ? (
           <section
             aria-busy="true"
             className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] p-8 text-center"
@@ -253,7 +361,7 @@ export function DashboardShell() {
                 <p className="mt-1.5 text-sm text-[var(--ink-muted)]">{statusError}</p>
                 <button
                   type="button"
-                  onClick={() => void loadStatus(false)}
+                  onClick={() => void triggerRefresh(true, true)}
                   className="mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent-fg)] hover:bg-[var(--accent-hover)]"
                 >
                   <RefreshCw className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
@@ -264,18 +372,23 @@ export function DashboardShell() {
           </section>
         ) : statusData ? (
           <>
+            <div className="mb-4 flex items-center justify-between text-xs text-[var(--ink-muted)] md:hidden">
+              <span>Sinkronisasi otomatis</span>
+              <span className="font-mono-num">{syncLabel}</span>
+            </div>
+
             {statusError ? (
               <div
                 role="alert"
-                className="mb-5 flex items-center justify-between gap-3 rounded-lg border border-[var(--danger-border)] bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger-fg)]"
+                className="mb-5 flex items-center justify-between gap-3 rounded-lg border border-[var(--warning-border)] bg-[var(--warning-bg)] px-4 py-3 text-sm text-[var(--warning-fg)]"
               >
                 <span>{statusError}</span>
                 <button
                   type="button"
-                  onClick={() => void loadStatus(true)}
-                  className="min-h-[36px] shrink-0 rounded-md border border-[var(--danger-border)] px-3 text-xs font-semibold hover:opacity-85"
+                  onClick={() => void triggerRefresh(true, true)}
+                  className="min-h-[36px] shrink-0 rounded-md border border-[var(--warning-border)] px-3 text-xs font-semibold hover:opacity-85"
                 >
-                  Ulangi
+                  Coba Sekarang
                 </button>
               </div>
             ) : null}
@@ -289,7 +402,7 @@ export function DashboardShell() {
               {activeTab === "attendance" ? (
                 <AttendanceTab
                   data={statusData}
-                  onRefresh={() => loadStatus(true)}
+                  onRefresh={() => triggerRefresh(true, true)}
                   onRecipientUpdated={handleRecipientUpdated}
                 />
               ) : null}
@@ -309,7 +422,7 @@ export function DashboardShell() {
                   contacts={contacts}
                   contactGroups={contactGroups}
                   onContactsChanged={loadContacts}
-                  onSentSuccess={() => loadStatus(true)}
+                  onSentSuccess={() => triggerRefresh(true, true)}
                 />
               ) : null}
             </div>

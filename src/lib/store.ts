@@ -34,6 +34,7 @@ const REDIS_KEYS = {
   botCustomMessage: "bot:config:custom_message",
   botOffDays: "bot:config:off_days",
   botSchedule: "bot:config:schedule",
+  dashboardVersion: "bot:meta:version",
   friendContacts: "contacts:friends",
   activityLogs: "logs:activity",
   authRateLimit: (ipHash: string) => `auth:ratelimit:${ipHash}`,
@@ -67,6 +68,29 @@ export async function getAttendanceStatus(dateWib: string): Promise<AttendanceSt
   return parsed;
 }
 
+function generateVersionToken(): string {
+  return `${Date.now()}-${crypto.randomBytes(3).toString("hex")}`;
+}
+
+export async function getDashboardVersion(): Promise<string> {
+  const redis = getRedis();
+  const raw = await redis.get<string | number>(REDIS_KEYS.dashboardVersion);
+  if (raw !== null && raw !== undefined && String(raw).trim().length > 0) {
+    return String(raw);
+  }
+
+  const initial = generateVersionToken();
+  await redis.set(REDIS_KEYS.dashboardVersion, initial);
+  return initial;
+}
+
+export async function touchDashboardVersion(): Promise<string> {
+  const redis = getRedis();
+  const next = generateVersionToken();
+  await redis.set(REDIS_KEYS.dashboardVersion, next);
+  return next;
+}
+
 export async function setAttendanceConfirmed(
   dateWib: string,
   confirmedBy: ConfirmedBy,
@@ -86,6 +110,7 @@ export async function setAttendanceConfirmed(
   await redis.set(REDIS_KEYS.attendanceStatus(dateWib), JSON.stringify(record), {
     ex: ATTENDANCE_STATUS_TTL_SECONDS,
   });
+  await touchDashboardVersion();
 
   return { record, alreadyConfirmed: false };
 }
@@ -106,6 +131,7 @@ export async function resetAttendanceStatus(
   }
 
   await redis.del(...keysToDelete);
+  await touchDashboardVersion();
 }
 
 export async function getStageSentAt(
@@ -146,6 +172,7 @@ export async function setStageSentLock(
   await redis.set(REDIS_KEYS.attendanceSent(dateWib, stage), sentAtWib, {
     ex: ATTENDANCE_SENT_TTL_SECONDS,
   });
+  await touchDashboardVersion();
   return sentAtWib;
 }
 
@@ -178,6 +205,7 @@ export async function setBotPauseConfig(
 
   const redis = getRedis();
   await redis.set(REDIS_KEYS.botPaused, JSON.stringify(config));
+  await touchDashboardVersion();
   return config;
 }
 
@@ -488,6 +516,163 @@ export async function appendActivityLogIfNotDuplicate(input: {
   return appendActivityLog(input);
 }
 
+export interface DashboardRawSnapshot {
+  attendance: AttendanceStatusRecord | null;
+  sentMap: Record<AttendanceStage, string | null>;
+  pauseConfig: BotPauseConfig;
+  logs: ActivityLogEntry[];
+  recipient: ActiveRecipientConfig;
+  customMessage: CustomMessageConfig | null;
+  upcomingOffDays: OffDayEntry[];
+  schedule: AttendanceScheduleConfig;
+  version: string;
+}
+
+// Ambil seluruh state dashboard dalam 1 round-trip HTTP pipeline untuk efisiensi kuota Upstash REST.
+export async function getDashboardSnapshotViaPipeline(
+  todayWib: string,
+): Promise<DashboardRawSnapshot> {
+  const env = getEnv();
+  const redis = getRedis();
+  const pipeline = redis.pipeline();
+
+  pipeline.get(REDIS_KEYS.attendanceStatus(todayWib));
+  pipeline.get(REDIS_KEYS.attendanceSent(todayWib, "morning"));
+  pipeline.get(REDIS_KEYS.attendanceSent(todayWib, "afternoon"));
+  pipeline.get(REDIS_KEYS.attendanceSent(todayWib, "urgent"));
+  pipeline.get(REDIS_KEYS.botPaused);
+  pipeline.lrange(REDIS_KEYS.activityLogs, 0, 14);
+  pipeline.get(REDIS_KEYS.botRecipient);
+  pipeline.get(REDIS_KEYS.botCustomMessage);
+  pipeline.hgetall(REDIS_KEYS.botOffDays);
+  pipeline.get(REDIS_KEYS.botSchedule);
+  pipeline.get(REDIS_KEYS.dashboardVersion);
+
+  const results = await pipeline.exec<unknown[]>();
+
+  const rawAttendance = parseStoredJson<AttendanceStatusRecord>(results[0]);
+  const attendance =
+    rawAttendance && rawAttendance.status === "confirmed" ? rawAttendance : null;
+
+  const normalizeSent = (val: unknown): string | null =>
+    typeof val === "string" && val.length > 0 ? val : null;
+  const sentMap: Record<AttendanceStage, string | null> = {
+    morning: normalizeSent(results[1]),
+    afternoon: normalizeSent(results[2]),
+    urgent: normalizeSent(results[3]),
+  };
+
+  const rawPause = parseStoredJson<BotPauseConfig>(results[4]);
+  const pauseConfig: BotPauseConfig =
+    rawPause && typeof rawPause.paused === "boolean"
+      ? {
+          paused: rawPause.paused,
+          updatedAt: typeof rawPause.updatedAt === "string" ? rawPause.updatedAt : "",
+          ...(rawPause.note ? { note: rawPause.note } : {}),
+        }
+      : { paused: false, updatedAt: "" };
+
+  const rawLogs = Array.isArray(results[5]) ? results[5] : [];
+  const logs: ActivityLogEntry[] = [];
+  for (const item of rawLogs) {
+    const parsed = parseStoredJson<ActivityLogEntry>(item);
+    if (parsed && parsed.id && parsed.summary) {
+      logs.push(parsed);
+    }
+  }
+
+  const rawRecipient = parseStoredJson<ActiveRecipientConfig>(results[6]);
+  const recipient: ActiveRecipientConfig =
+    rawRecipient &&
+    typeof rawRecipient.name === "string" &&
+    rawRecipient.name.trim().length > 0 &&
+    typeof rawRecipient.email === "string" &&
+    rawRecipient.email.trim().length > 0
+      ? {
+          name: rawRecipient.name.trim(),
+          email: rawRecipient.email.trim().toLowerCase(),
+          updatedAt: typeof rawRecipient.updatedAt === "string" ? rawRecipient.updatedAt : "",
+        }
+      : { name: env.PARTNER_NAME, email: env.PARTNER_EMAIL, updatedAt: "" };
+
+  const rawMsg = parseStoredJson<CustomMessageConfig>(results[7]);
+  let customMessage: CustomMessageConfig | null = null;
+  if (rawMsg && typeof rawMsg.message === "string" && rawMsg.message.trim().length > 0) {
+    const scope: CustomMessageScope = rawMsg.scope === "always" ? "always" : "today_only";
+    if (scope === "always" || rawMsg.activeDate === todayWib) {
+      customMessage = {
+        message: rawMsg.message.trim(),
+        scope,
+        ...(rawMsg.activeDate ? { activeDate: rawMsg.activeDate } : {}),
+        updatedAt: typeof rawMsg.updatedAt === "string" ? rawMsg.updatedAt : "",
+      };
+    }
+  }
+
+  const rawOffDays =
+    results[8] && typeof results[8] === "object"
+      ? (results[8] as Record<string, unknown>)
+      : null;
+  const pastOffFields: string[] = [];
+  const upcomingOffDays: OffDayEntry[] = [];
+  if (rawOffDays) {
+    for (const [field, value] of Object.entries(rawOffDays)) {
+      const parsed = parseStoredJson<OffDayEntry>(value);
+      const entryDate = parsed?.date && isValidYmdDate(parsed.date) ? parsed.date : field;
+      if (!isValidYmdDate(entryDate) || entryDate < todayWib) {
+        pastOffFields.push(field);
+        continue;
+      }
+      upcomingOffDays.push({
+        date: entryDate,
+        ...(parsed?.note?.trim() ? { note: parsed.note.trim() } : {}),
+        createdAt: typeof parsed?.createdAt === "string" ? parsed.createdAt : "",
+      });
+    }
+    upcomingOffDays.sort((a, b) => a.date.localeCompare(b.date));
+    if (pastOffFields.length > 0) {
+      await redis.hdel(REDIS_KEYS.botOffDays, ...pastOffFields);
+    }
+  }
+
+  const rawSchedule = parseStoredJson<Partial<AttendanceScheduleConfig>>(results[9]);
+  const schedule: AttendanceScheduleConfig = rawSchedule
+    ? {
+        morning: sanitizeStageConfig(rawSchedule.morning, DEFAULT_ATTENDANCE_SCHEDULE.morning),
+        afternoon: sanitizeStageConfig(rawSchedule.afternoon, DEFAULT_ATTENDANCE_SCHEDULE.afternoon),
+        urgent: sanitizeStageConfig(rawSchedule.urgent, DEFAULT_ATTENDANCE_SCHEDULE.urgent),
+        updatedAt: typeof rawSchedule.updatedAt === "string" ? rawSchedule.updatedAt : "",
+      }
+    : {
+        morning: { ...DEFAULT_ATTENDANCE_SCHEDULE.morning },
+        afternoon: { ...DEFAULT_ATTENDANCE_SCHEDULE.afternoon },
+        urgent: { ...DEFAULT_ATTENDANCE_SCHEDULE.urgent },
+        updatedAt: "",
+      };
+
+  const rawVersion = results[10];
+  let version =
+    rawVersion !== null && rawVersion !== undefined && String(rawVersion).trim().length > 0
+      ? String(rawVersion)
+      : "";
+  if (!version) {
+    version = generateVersionToken();
+    await redis.set(REDIS_KEYS.dashboardVersion, version);
+  }
+
+  return {
+    attendance,
+    sentMap,
+    pauseConfig,
+    logs,
+    recipient,
+    customMessage,
+    upcomingOffDays,
+    schedule,
+    version,
+  };
+}
+
 export async function listFriendContacts(): Promise<FriendContact[]> {
   const redis = getRedis();
   const rawHash = await redis.hgetall<Record<string, unknown>>(REDIS_KEYS.friendContacts);
@@ -604,6 +789,7 @@ export async function appendActivityLog(input: {
   const pipeline = redis.pipeline();
   pipeline.lpush(REDIS_KEYS.activityLogs, JSON.stringify(entry));
   pipeline.ltrim(REDIS_KEYS.activityLogs, 0, ACTIVITY_LOG_MAX_ENTRIES - 1);
+  pipeline.set(REDIS_KEYS.dashboardVersion, generateVersionToken());
   await pipeline.exec();
 
   return entry;

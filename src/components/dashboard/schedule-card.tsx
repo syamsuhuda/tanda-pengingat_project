@@ -70,6 +70,7 @@ export function ScheduleCard({ schedule, onChanged }: ScheduleCardProps) {
     afternoon: { ...schedule.afternoon },
     urgent: { ...schedule.urgent },
   });
+  const [isDirty, setIsDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
@@ -77,11 +78,13 @@ export function ScheduleCard({ schedule, onChanged }: ScheduleCardProps) {
   } | null>(null);
 
   useEffect(() => {
-    setDraft({
-      morning: { ...schedule.morning },
-      afternoon: { ...schedule.afternoon },
-      urgent: { ...schedule.urgent },
-    });
+    if (!isDirty) {
+      setDraft({
+        morning: { ...schedule.morning },
+        afternoon: { ...schedule.afternoon },
+        urgent: { ...schedule.urgent },
+      });
+    }
   }, [
     schedule.morning.enabled,
     schedule.morning.time,
@@ -90,6 +93,7 @@ export function ScheduleCard({ schedule, onChanged }: ScheduleCardProps) {
     schedule.urgent.enabled,
     schedule.urgent.time,
     schedule.updatedAt,
+    isDirty,
   ]);
 
   const validationError = useMemo(() => validateScheduleOrder(draft), [draft]);
@@ -102,6 +106,7 @@ export function ScheduleCard({ schedule, onChanged }: ScheduleCardProps) {
       ...prev,
       [stage]: { ...prev[stage], ...patch },
     }));
+    setIsDirty(true);
     if (feedback) setFeedback(null);
   }
 
@@ -128,6 +133,7 @@ export function ScheduleCard({ schedule, onChanged }: ScheduleCardProps) {
         return;
       }
 
+      setIsDirty(false);
       setFeedback({
         type: "success",
         text: body.message ?? "Jadwal pengingat berhasil diperbarui.",

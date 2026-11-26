@@ -19,6 +19,7 @@ export function CustomMessageCard({
   const [scope, setScope] = useState<CustomMessageScope>(
     customMessage?.scope ?? "today_only",
   );
+  const [isDirty, setIsDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [feedback, setFeedback] = useState<{
@@ -27,9 +28,11 @@ export function CustomMessageCard({
   } | null>(null);
 
   useEffect(() => {
-    setMessageText(customMessage?.message ?? "");
-    setScope(customMessage?.scope ?? "today_only");
-  }, [customMessage?.message, customMessage?.scope, customMessage?.updatedAt]);
+    if (!isDirty) {
+      setMessageText(customMessage?.message ?? "");
+      setScope(customMessage?.scope ?? "today_only");
+    }
+  }, [customMessage?.message, customMessage?.scope, customMessage?.updatedAt, isDirty]);
 
   async function handleSave(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -55,6 +58,7 @@ export function CustomMessageCard({
         return;
       }
 
+      setIsDirty(false);
       setFeedback({
         type: "success",
         text: body.message ?? "Pesan khusus pengingat berhasil disimpan.",
@@ -95,6 +99,7 @@ export function CustomMessageCard({
 
       setMessageText("");
       setScope("today_only");
+      setIsDirty(false);
       setFeedback({
         type: "success",
         text: body.message ?? "Pesan khusus dihapus.",
@@ -151,7 +156,10 @@ export function CustomMessageCard({
             rows={3}
             maxLength={500}
             value={messageText}
-            onChange={(event) => setMessageText(event.target.value)}
+            onChange={(event) => {
+              setMessageText(event.target.value);
+              setIsDirty(true);
+            }}
             placeholder="Contoh: Semangat jaga paginya ya, jangan lupa sarapan."
             className="mt-1.5 w-full rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-3.5 py-2.5 text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
           />
@@ -181,7 +189,10 @@ export function CustomMessageCard({
                 name="custom-message-scope"
                 value="today_only"
                 checked={scope === "today_only"}
-                onChange={() => setScope("today_only")}
+                onChange={() => {
+                  setScope("today_only");
+                  setIsDirty(true);
+                }}
                 className="h-4 w-4 accent-[var(--accent)]"
               />
               <span className="font-medium text-[var(--ink)]">
@@ -203,7 +214,10 @@ export function CustomMessageCard({
                 name="custom-message-scope"
                 value="always"
                 checked={scope === "always"}
-                onChange={() => setScope("always")}
+                onChange={() => {
+                  setScope("always");
+                  setIsDirty(true);
+                }}
                 className="h-4 w-4 accent-[var(--accent)]"
               />
               <span className="font-medium text-[var(--ink)]">

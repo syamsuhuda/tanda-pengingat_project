@@ -118,6 +118,7 @@ export function AttendanceTab({
 
   const [pauseDraft, setPauseDraft] = useState(data.pauseConfig.paused);
   const [pauseNote, setPauseNote] = useState(data.pauseConfig.note ?? "");
+  const [pauseNoteDirty, setPauseNoteDirty] = useState(false);
   const [savingPause, setSavingPause] = useState(false);
   const [pauseFeedback, setPauseFeedback] = useState<{
     type: "success" | "error";
@@ -126,8 +127,10 @@ export function AttendanceTab({
 
   useEffect(() => {
     setPauseDraft(data.pauseConfig.paused);
-    setPauseNote(data.pauseConfig.note ?? "");
-  }, [data.pauseConfig.paused, data.pauseConfig.note]);
+    if (!pauseNoteDirty) {
+      setPauseNote(data.pauseConfig.note ?? "");
+    }
+  }, [data.pauseConfig.paused, data.pauseConfig.note, pauseNoteDirty]);
 
   useEffect(() => {
     if (!manualNoteTouched) {
@@ -334,6 +337,7 @@ export function AttendanceTab({
         return;
       }
 
+      setPauseNoteDirty(false);
       setPauseFeedback({
         type: "success",
         text: body.message ?? "Pengaturan Mode Jeda Bot disimpan.",
@@ -758,7 +762,10 @@ export function AttendanceTab({
                   type="text"
                   maxLength={240}
                   value={pauseNote}
-                  onChange={(event) => setPauseNote(event.target.value)}
+                  onChange={(event) => {
+                    setPauseNote(event.target.value);
+                    setPauseNoteDirty(true);
+                  }}
                   placeholder="Contoh: Cuti bersama sampai Senin"
                   className="mt-1.5 min-h-[44px] w-full rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-3.5 text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
                 />
