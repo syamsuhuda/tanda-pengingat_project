@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, CheckCircle2, Clock, PartyPopper, ShieldAlert, Sparkles } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, PartyPopper, ShieldAlert } from "lucide-react";
 import type { ConfirmedBy } from "@/lib/types";
 
 export type ConfirmInitialState =
@@ -22,16 +22,6 @@ interface ConfirmAttendanceCardProps {
   partnerName?: string;
   errorDetail?: string;
 }
-
-const CONFETTI_PARTICLES = [
-  { tx: "-64px", ty: "-44px", rot: "-140deg", color: "bg-emerald-400" },
-  { tx: "-32px", ty: "-66px", rot: "90deg", color: "bg-rose-400" },
-  { tx: "0px", ty: "-74px", rot: "180deg", color: "bg-amber-400" },
-  { tx: "36px", ty: "-62px", rot: "-110deg", color: "bg-sky-400" },
-  { tx: "66px", ty: "-40px", rot: "145deg", color: "bg-violet-400" },
-  { tx: "-48px", ty: "-18px", rot: "75deg", color: "bg-orange-400" },
-  { tx: "52px", ty: "-16px", rot: "-85deg", color: "bg-emerald-300" },
-] as const;
 
 export function ConfirmAttendanceCard({
   initialState,
@@ -103,35 +93,19 @@ export function ConfirmAttendanceCard({
 
   if (status === "already_confirmed") {
     return (
-      <section className="relative overflow-hidden rounded-3xl border border-[var(--success-border)] bg-[var(--surface)] p-6 shadow-2xl sm:p-8">
-        <div className="relative flex flex-col items-center text-center">
-          <div className="relative flex h-16 w-16 items-center justify-center rounded-3xl bg-[var(--success-bg)] text-[var(--success-fg)]">
+      <section className="rounded-2xl border border-[var(--success-border)] bg-[var(--surface)] p-6 shadow-sm sm:p-8">
+        <div className="flex flex-col items-center text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--success-bg)] text-[var(--success-fg)]">
             <CheckCircle2
               className={`h-9 w-9 ${justCelebrated ? "animate-celebrate-pop" : ""}`}
               strokeWidth={2.2}
               aria-hidden="true"
             />
-            {justCelebrated
-              ? CONFETTI_PARTICLES.map((p, index) => (
-                  <span
-                    key={index}
-                    aria-hidden="true"
-                    style={
-                      {
-                        "--tx": p.tx,
-                        "--ty": p.ty,
-                        "--rot": p.rot,
-                      } as React.CSSProperties
-                    }
-                    className={`animate-confetti-piece pointer-events-none absolute h-2.5 w-2.5 rounded-sm ${p.color}`}
-                  />
-                ))
-              : null}
           </div>
 
-          <div className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-[var(--success-border)] bg-[var(--success-bg)] px-3 py-1 text-xs font-bold text-[var(--success-fg)]">
+          <div className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-[var(--success-border)] bg-[var(--success-bg)] px-2.5 py-1 text-xs font-bold text-[var(--success-fg)]">
             <PartyPopper className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-            <span>Absen Tercatat!</span>
+            <span>Absen Tercatat</span>
           </div>
 
           <h1 className="font-display mt-3 text-2xl font-bold text-[var(--ink)] sm:text-3xl">
@@ -139,7 +113,7 @@ export function ConfirmAttendanceCard({
           </h1>
           <p className="mt-1.5 text-sm font-semibold text-[var(--ink-muted)]">{dateFormatted}</p>
 
-          <div className="mt-5 w-full rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-4 text-left text-sm text-[var(--ink-muted)]">
+          <div className="mt-5 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-4 text-left text-sm text-[var(--ink-muted)]">
             {confirmedTime ? (
               <p className="flex items-center gap-2 text-[var(--ink)]">
                 <Clock className="h-4 w-4 shrink-0 text-[var(--success-fg)]" strokeWidth={2} aria-hidden="true" />
@@ -184,8 +158,8 @@ export function ConfirmAttendanceCard({
     };
 
     return (
-      <section className="rounded-3xl border border-[var(--danger-border)] bg-[var(--surface)] p-6 shadow-2xl sm:p-8">
-        <div className="inline-flex items-center gap-2 rounded-full border border-[var(--danger-border)] bg-[var(--danger-bg)] px-3 py-1.5 text-xs font-bold text-[var(--danger-fg)]">
+      <section className="rounded-2xl border border-[var(--danger-border)] bg-[var(--surface)] p-6 shadow-sm sm:p-8">
+        <div className="inline-flex items-center gap-2 rounded-md border border-[var(--danger-border)] bg-[var(--danger-bg)] px-2.5 py-1 text-xs font-bold text-[var(--danger-fg)]">
           <ShieldAlert className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
           <span>Belum Bisa Diproses</span>
         </div>
@@ -204,18 +178,17 @@ export function ConfirmAttendanceCard({
   }
 
   return (
-    <section className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--surface)] p-6 shadow-2xl sm:p-8">
-      <div className="inline-flex items-center gap-1.5 rounded-full bg-[var(--accent-tint)] px-3 py-1 text-xs font-bold text-[var(--accent)]">
-        <Sparkles className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-        <span>Konfirmasi Absen Harian</span>
-      </div>
+    <section className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] p-6 shadow-sm sm:p-8">
+      <p className="font-mono-num text-xs font-semibold text-[var(--accent)]">
+        Konfirmasi Absen Harian (WIB)
+      </p>
 
-      <h1 className="font-display mt-3 text-2xl font-bold leading-snug text-[var(--ink)] sm:text-3xl">
+      <h1 className="font-display mt-2 text-2xl font-bold leading-snug text-[var(--ink)] sm:text-3xl">
         {partnerName ? `Hai ${partnerName}, sudah absen?` : "Sudah absen hari ini?"}
       </h1>
 
       <p className="font-mono-num mt-1.5 text-sm font-semibold text-[var(--ink-muted)]">
-        {dateFormatted} (WIB)
+        {dateFormatted}
       </p>
 
       <p className="mt-3 text-sm leading-relaxed text-[var(--ink-muted)]">
@@ -225,7 +198,7 @@ export function ConfirmAttendanceCard({
       {submitError ? (
         <div
           role="alert"
-          className="mt-5 flex items-start gap-2.5 rounded-2xl border border-[var(--danger-border)] bg-[var(--danger-bg)] p-3.5 text-sm text-[var(--danger-fg)]"
+          className="mt-5 flex items-start gap-2.5 rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] p-3.5 text-sm text-[var(--danger-fg)]"
         >
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.9} aria-hidden="true" />
           <span>{submitError}</span>
@@ -236,7 +209,7 @@ export function ConfirmAttendanceCard({
         type="button"
         onClick={handleConfirm}
         disabled={submitting}
-        className="btn-playful-gradient mt-6 inline-flex min-h-[56px] w-full items-center justify-center gap-2.5 rounded-full px-6 text-base font-bold shadow-lg transition-all active:scale-[0.97] disabled:opacity-60"
+        className="btn-primary-accent mt-6 inline-flex min-h-[54px] w-full items-center justify-center gap-2.5 rounded-xl px-6 text-base font-bold transition-colors active:scale-[0.98] disabled:opacity-60"
       >
         <CheckCircle2 className="h-5 w-5" strokeWidth={2.2} aria-hidden="true" />
         <span>{submitting ? "Menyimpan..." : "Yeay, Aku Sudah Absen!"}</span>

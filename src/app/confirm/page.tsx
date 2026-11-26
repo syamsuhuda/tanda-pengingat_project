@@ -77,16 +77,11 @@ export default async function ConfirmPage({ searchParams }: ConfirmPageProps) {
   }
 
   return (
-    <div className="relative flex min-h-dvh flex-col overflow-hidden bg-[var(--bg)]">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -top-24 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-emerald-500/12 blur-3xl dark:bg-emerald-500/15"
-      />
-
-      <header className="relative z-10 mx-auto flex w-full max-w-3xl items-center justify-between px-4 py-4 sm:px-6">
+    <div className="flex min-h-dvh flex-col bg-[var(--bg)]">
+      <header className="mx-auto flex w-full max-w-3xl items-center justify-between px-4 py-4 sm:px-6">
         <div className="flex items-center gap-2.5 text-[var(--ink)]">
-          <div className="btn-playful-gradient flex h-9 w-9 items-center justify-center rounded-2xl shadow-xs">
-            <CalendarClock className="h-5 w-5" strokeWidth={2.1} aria-hidden="true" />
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--border-subtle)] bg-[var(--accent-tint)] text-[var(--accent)]">
+            <CalendarClock className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
           </div>
           <span className="font-display text-lg font-bold tracking-tight">
             Pengingat Jadwal
@@ -95,7 +90,7 @@ export default async function ConfirmPage({ searchParams }: ConfirmPageProps) {
         <ThemeToggle />
       </header>
 
-      <main className="relative z-10 mx-auto flex w-full max-w-lg flex-1 flex-col justify-center px-4 py-6 sm:px-6">
+      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center px-4 py-6 sm:px-6">
         <ConfirmAttendanceCard
           initialState={initialState}
           dateWib={dateParam}
@@ -108,7 +103,7 @@ export default async function ConfirmPage({ searchParams }: ConfirmPageProps) {
         />
       </main>
 
-      <footer className="relative z-10 mx-auto w-full max-w-3xl px-4 py-5 text-center text-xs text-[var(--ink-muted)] sm:px-6">
+      <footer className="mx-auto w-full max-w-3xl px-4 py-5 text-center text-xs text-[var(--ink-muted)] sm:px-6">
         Pengingat Absen Harian (Zona Waktu WIB / Asia/Jakarta)
       </footer>
     </div>

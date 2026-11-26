@@ -28,7 +28,7 @@ function getLogCategory(type: ActivityLogType): "attendance" | "dispatch" | "sys
 
 const DOT_COLOR_BY_CAT = {
   attendance: "bg-emerald-400",
-  dispatch: "bg-rose-400",
+  dispatch: "bg-orange-400",
   system: "bg-sky-400",
 } as const;
 
@@ -65,13 +65,13 @@ export function ActivityLogsCard({ logs }: ActivityLogsCardProps) {
   return (
     <section
       aria-labelledby="activity-logs-heading"
-      className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-sm sm:p-6"
+      className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-xs sm:p-6"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-baseline gap-2">
           <h2
             id="activity-logs-heading"
-            className="font-display text-lg font-semibold text-[var(--ink)] sm:text-xl"
+            className="font-display text-lg font-semibold text-[var(--ink)]"
           >
             Log Aktivitas Terakhir
           </h2>
@@ -92,9 +92,9 @@ export function ActivityLogsCard({ logs }: ActivityLogsCardProps) {
               key={item.key}
               type="button"
               onClick={() => setFilter(item.key)}
-              className={`min-h-[32px] rounded-full px-2.5 text-xs font-semibold transition-colors ${
+              className={`min-h-[32px] rounded-lg px-2.5 text-xs font-semibold transition-colors ${
                 filter === item.key
-                  ? "bg-[var(--accent)] text-[var(--accent-fg)]"
+                  ? "bg-[var(--ink)] text-[var(--bg)]"
                   : "bg-[var(--surface-elevated)] text-[var(--ink-muted)] hover:text-[var(--ink)]"
               }`}
             >
@@ -105,20 +105,20 @@ export function ActivityLogsCard({ logs }: ActivityLogsCardProps) {
       </div>
 
       {filteredLogs.length === 0 ? (
-        <div className="mt-4 rounded-2xl border border-dashed border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-5 text-center text-xs text-[var(--ink-muted)]">
+        <div className="mt-4 rounded-xl border border-dashed border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-5 text-center text-xs text-[var(--ink-muted)]">
           {logs.length === 0
             ? "Belum ada aktivitas tercatat. Riwayat cron, konfirmasi, dan undangan akan muncul di sini."
             : "Belum ada aktivitas pada filter ini."}
         </div>
       ) : (
-        <ul className="custom-scrollbar mt-4 max-h-[300px] space-y-2.5 overflow-y-auto pr-1.5 sm:max-h-[360px]">
+        <ul className="custom-scrollbar mt-4 max-h-[300px] space-y-2 overflow-y-auto pr-1.5 sm:max-h-[360px]">
           {filteredLogs.map((entry) => {
             const category = getLogCategory(entry.type);
             const badge = RESULT_BADGE[entry.result];
             return (
               <li
                 key={entry.id}
-                className="relative rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] py-2.5 pr-3 pl-7"
+                className="relative rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] py-2.5 pr-3 pl-7"
               >
                 <span
                   aria-hidden="true"
@@ -129,7 +129,7 @@ export function ActivityLogsCard({ logs }: ActivityLogsCardProps) {
                     {formatIsoToWibDateTime(entry.timestamp)}
                   </span>
                   <span
-                    className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${badge.className}`}
+                    className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold ${badge.className}`}
                   >
                     {badge.label}
                   </span>

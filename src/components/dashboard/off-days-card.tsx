@@ -60,7 +60,7 @@ export function OffDaysCard({
       setFormOpen(false);
       setFeedback({
         type: "success",
-        text: body.message ?? "Tanggal libur ditambahkan!",
+        text: body.message ?? "Tanggal libur ditambahkan.",
       });
       await onChanged();
     } catch {
@@ -110,20 +110,20 @@ export function OffDaysCard({
   return (
     <section
       aria-labelledby="off-days-heading"
-      className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-sm sm:p-6"
+      className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-xs sm:p-6"
     >
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2
             id="off-days-heading"
-            className="font-display text-lg font-semibold text-[var(--ink)] sm:text-xl"
+            className="font-display text-lg font-semibold text-[var(--ink)]"
           >
             Jadwal Libur Shift
           </h2>
           <p className="mt-0.5 text-xs text-[var(--ink-muted)]">
             {upcomingOffDays.length === 0
-              ? "Belum ada off-day terjadwal."
-              : `${upcomingOffDays.length} tanggal libur mendatang.`}
+              ? "Belum ada tanggal libur mendatang."
+              : `${upcomingOffDays.length} hari libur terjadwal.`}
           </p>
         </div>
 
@@ -134,7 +134,7 @@ export function OffDaysCard({
             setFeedback(null);
           }}
           aria-expanded={formOpen}
-          className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-2xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-xs font-semibold text-[var(--ink)] transition-all hover:bg-[var(--surface-muted)] active:scale-[0.97]"
+          className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-xs font-semibold text-[var(--ink)] transition-colors hover:bg-[var(--surface-muted)] active:scale-[0.98]"
         >
           <Plus
             className={`h-4 w-4 transition-transform ${formOpen ? "rotate-45" : ""}`}
@@ -148,7 +148,7 @@ export function OffDaysCard({
       {formOpen ? (
         <form
           onSubmit={addCustomDate}
-          className="mt-4 space-y-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-3.5"
+          className="mt-4 space-y-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-3.5"
         >
           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
             <div>
@@ -174,7 +174,7 @@ export function OffDaysCard({
                 htmlFor="off-day-note"
                 className="block text-xs font-semibold text-[var(--ink)]"
               >
-                Alasan / Catatan
+                Catatan (opsional)
               </label>
               <input
                 id="off-day-note"
@@ -191,10 +191,10 @@ export function OffDaysCard({
           <button
             type="submit"
             disabled={busyKey !== null}
-            className="btn-playful-gradient inline-flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-xl px-4 text-xs font-semibold shadow-sm transition-all active:scale-[0.98] disabled:opacity-50"
+            className="inline-flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-xl bg-[var(--ink)] px-4 text-xs font-semibold text-[var(--bg)] transition-opacity hover:opacity-90 active:scale-[0.98] disabled:opacity-50"
           >
             <CalendarOff className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-            <span>{busyKey === "custom" ? "Menambahkan..." : "Simpan Tanggal Libur"}</span>
+            <span>{busyKey === "custom" ? "Menyimpan..." : "Simpan Tanggal Libur"}</span>
           </button>
         </form>
       ) : null}
@@ -202,7 +202,7 @@ export function OffDaysCard({
       {feedback ? (
         <div
           role={feedback.type === "error" ? "alert" : "status"}
-          className={`mt-3 flex items-start gap-2 rounded-2xl border px-3 py-2 text-xs font-medium ${
+          className={`mt-3 flex items-start gap-2 rounded-xl border px-3 py-2 text-xs font-medium ${
             feedback.type === "error"
               ? "border-[var(--danger-border)] bg-[var(--danger-bg)] text-[var(--danger-fg)]"
               : "border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-fg)]"
@@ -219,15 +219,15 @@ export function OffDaysCard({
 
       <div className="mt-4">
         {upcomingOffDays.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-4 py-3 text-xs text-[var(--ink-muted)]">
-            Gunakan tombol cepat di Hero Card untuk liburkan hari ini/besok, atau klik <strong>+ Tambah Tanggal</strong>.
+          <p className="rounded-xl border border-dashed border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-4 py-3 text-xs text-[var(--ink-muted)]">
+            Gunakan tombol pintas di atas untuk liburkan hari ini/besok, atau klik <strong>+ Tambah Tanggal</strong>.
           </p>
         ) : (
           <div className="flex flex-wrap gap-2">
             {upcomingOffDays.map((item) => (
               <div
                 key={item.date}
-                className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[var(--off-border)] bg-[var(--off-bg)] py-1 pr-1.5 pl-3 text-xs font-semibold text-[var(--off-fg)]"
+                className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-[var(--off-border)] bg-[var(--off-bg)] py-1 pr-1 pl-2.5 text-xs font-semibold text-[var(--off-fg)]"
               >
                 <span className="truncate">
                   {formatWibDateCompactIndonesian(item.date)}
@@ -238,7 +238,7 @@ export function OffDaysCard({
                   disabled={busyKey !== null}
                   onClick={() => void removeDate(item.date)}
                   aria-label={`Hapus libur ${formatWibDateCompactIndonesian(item.date)}`}
-                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-black/15 dark:hover:bg-white/15 disabled:opacity-40"
+                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-black/15 dark:hover:bg-white/15 disabled:opacity-40"
                 >
                   <X className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden="true" />
                 </button>

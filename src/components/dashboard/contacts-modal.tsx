@@ -163,7 +163,7 @@ export function ContactsModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/65 p-0 backdrop-blur-xs sm:items-center sm:p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/65 p-0 sm:items-center sm:p-4"
       role="presentation"
       onClick={(event) => {
         if (event.target === event.currentTarget) {
@@ -175,7 +175,7 @@ export function ContactsModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="contacts-modal-title"
-        className="flex max-h-[90dvh] w-full max-w-2xl flex-col rounded-t-3xl border border-[var(--border-subtle)] bg-[var(--surface)] shadow-2xl sm:rounded-3xl"
+        className="flex max-h-[90dvh] w-full max-w-2xl flex-col rounded-t-2xl border border-[var(--border-subtle)] bg-[var(--surface)] shadow-2xl sm:rounded-2xl"
       >
         <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-5 py-4">
           <div>

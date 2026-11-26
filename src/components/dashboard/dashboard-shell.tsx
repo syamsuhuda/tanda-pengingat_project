@@ -44,12 +44,12 @@ const CONNECTION_META: Record<
 > = {
   live: {
     label: "Live",
-    dotClass: "bg-emerald-400 motion-safe:animate-pulse",
+    dotClass: "bg-emerald-400",
     badgeClass:
       "border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-fg)]",
   },
   reconnecting: {
-    label: "Menyambung ulang...",
+    label: "Menyambung...",
     dotClass: "bg-amber-400",
     badgeClass:
       "border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-fg)]",
@@ -191,11 +191,11 @@ export function DashboardShell() {
 
   return (
     <div className="min-h-dvh bg-[var(--bg)] text-[var(--ink)]">
-      <header className="sticky top-0 z-30 border-b border-[var(--border-subtle)] bg-[var(--surface)]/92 backdrop-blur-md">
+      <header className="sticky top-0 z-30 border-b border-[var(--border-subtle)] bg-[var(--surface)]">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5 sm:px-6">
           <div className="flex min-w-0 items-center gap-2.5">
-            <div className="btn-playful-gradient flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl shadow-xs">
-              <CalendarClock className="h-5 w-5" strokeWidth={2.1} aria-hidden="true" />
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--border-subtle)] bg-[var(--accent-tint)] text-[var(--accent)]">
+              <CalendarClock className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
@@ -204,11 +204,11 @@ export function DashboardShell() {
                 </span>
                 <span
                   aria-live="polite"
-                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${connMeta.badgeClass}`}
+                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-semibold ${connMeta.badgeClass}`}
                 >
                   <span
                     aria-hidden="true"
-                    className={`h-2 w-2 rounded-full ${connMeta.dotClass}`}
+                    className={`h-1.5 w-1.5 rounded-full ${connMeta.dotClass}`}
                   />
                   <span>{connMeta.label}</span>
                 </span>
@@ -223,7 +223,7 @@ export function DashboardShell() {
           <nav
             aria-label="Navigasi utama"
             role="tablist"
-            className="hidden items-center gap-1 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-1 sm:flex"
+            className="hidden items-center gap-1 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-1 sm:flex"
           >
             <button
               type="button"
@@ -232,13 +232,17 @@ export function DashboardShell() {
               aria-selected={activeTab === "attendance"}
               aria-controls="panel-attendance"
               onClick={() => setActiveTab("attendance")}
-              className={`inline-flex min-h-[40px] items-center gap-2 rounded-xl px-3.5 text-sm font-semibold transition-all ${
+              className={`inline-flex min-h-[38px] items-center gap-2 rounded-lg px-3.5 text-sm font-semibold transition-colors ${
                 activeTab === "attendance"
                   ? "bg-[var(--surface)] text-[var(--ink)] shadow-xs ring-1 ring-[var(--border-subtle)]"
                   : "text-[var(--ink-muted)] hover:text-[var(--ink)]"
               }`}
             >
-              <BellRing className="h-4 w-4 text-[var(--accent)]" strokeWidth={2} aria-hidden="true" />
+              <BellRing
+                className={`h-4 w-4 ${activeTab === "attendance" ? "text-[var(--accent)]" : ""}`}
+                strokeWidth={2}
+                aria-hidden="true"
+              />
               <span>Kontrol Absen</span>
             </button>
 
@@ -249,13 +253,17 @@ export function DashboardShell() {
               aria-selected={activeTab === "itinerary"}
               aria-controls="panel-itinerary"
               onClick={() => setActiveTab("itinerary")}
-              className={`inline-flex min-h-[40px] items-center gap-2 rounded-xl px-3.5 text-sm font-semibold transition-all ${
+              className={`inline-flex min-h-[38px] items-center gap-2 rounded-lg px-3.5 text-sm font-semibold transition-colors ${
                 activeTab === "itinerary"
                   ? "bg-[var(--surface)] text-[var(--ink)] shadow-xs ring-1 ring-[var(--border-subtle)]"
                   : "text-[var(--ink-muted)] hover:text-[var(--ink)]"
               }`}
             >
-              <CalendarPlus className="h-4 w-4 text-[var(--accent)]" strokeWidth={2} aria-hidden="true" />
+              <CalendarPlus
+                className={`h-4 w-4 ${activeTab === "itinerary" ? "text-[var(--accent)]" : ""}`}
+                strokeWidth={2}
+                aria-hidden="true"
+              />
               <span>Undangan &amp; Itinerary</span>
             </button>
           </nav>
@@ -267,7 +275,7 @@ export function DashboardShell() {
               disabled={isSyncing || isInitialLoading}
               aria-label="Muat ulang data dashboard"
               title={`Sinkron: ${syncLabel}`}
-              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl border border-[var(--border-control)] bg-[var(--surface)] text-[var(--ink)] transition-all hover:bg-[var(--surface-muted)] active:scale-[0.96] disabled:opacity-50"
+              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-[var(--border-control)] bg-[var(--surface)] text-[var(--ink)] transition-colors hover:bg-[var(--surface-muted)] active:scale-[0.97] disabled:opacity-50"
             >
               <RefreshCw
                 className={`h-4 w-4 ${isSyncing ? "animate-spin text-[var(--accent)]" : ""}`}
@@ -283,7 +291,7 @@ export function DashboardShell() {
               onClick={handleLogout}
               disabled={loggingOut}
               aria-label="Keluar dari dashboard"
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-2xl border border-[var(--border-control)] bg-[var(--surface)] px-3 text-sm font-semibold text-[var(--ink)] transition-all hover:bg-[var(--surface-muted)] active:scale-[0.96] disabled:opacity-50"
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-3 text-sm font-semibold text-[var(--ink)] transition-colors hover:bg-[var(--surface-muted)] active:scale-[0.97] disabled:opacity-50"
             >
               <LogOut className="h-4 w-4" strokeWidth={1.9} aria-hidden="true" />
               <span className="hidden md:inline">{loggingOut ? "Keluar..." : "Keluar"}</span>
@@ -301,7 +309,7 @@ export function DashboardShell() {
             <div
               key={toast.id}
               role="status"
-              className="pointer-events-auto flex items-start gap-2.5 rounded-2xl border border-[var(--success-border)] bg-[var(--surface)] px-4 py-3 text-sm font-medium text-[var(--ink)] shadow-xl"
+              className="pointer-events-auto flex items-start gap-2.5 rounded-xl border border-[var(--success-border)] bg-[var(--surface)] px-4 py-3 text-sm font-medium text-[var(--ink)] shadow-xl"
             >
               <CheckCircle2
                 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--success-fg)]"
@@ -313,7 +321,7 @@ export function DashboardShell() {
                 type="button"
                 onClick={() => dismissToast(toast.id)}
                 aria-label="Tutup notifikasi"
-                className="-mt-1 -mr-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-[var(--ink-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--ink)]"
+                className="-mt-1 -mr-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--ink-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--ink)]"
               >
                 <X className="h-4 w-4" strokeWidth={1.9} aria-hidden="true" />
               </button>
@@ -326,21 +334,21 @@ export function DashboardShell() {
         {isInitialLoading && !statusData ? (
           <section
             aria-busy="true"
-            className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--surface)] p-10 text-center"
+            className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] p-10 text-center"
           >
             <RefreshCw
-              className="mx-auto h-7 w-7 animate-spin text-[var(--accent)]"
+              className="mx-auto h-6 w-6 animate-spin text-[var(--accent)]"
               strokeWidth={2}
               aria-hidden="true"
             />
             <p className="mt-3 text-sm font-medium text-[var(--ink)]">
-              Menyiapkan dashboard &amp; jadwal hari ini (WIB)...
+              Menyiapkan status hari ini (WIB)...
             </p>
           </section>
         ) : statusError && !statusData ? (
           <section
             role="alert"
-            className="rounded-3xl border border-[var(--danger-border)] bg-[var(--surface)] p-6 sm:p-8"
+            className="rounded-2xl border border-[var(--danger-border)] bg-[var(--surface)] p-6 sm:p-8"
           >
             <div className="flex items-start gap-3">
               <AlertCircle
@@ -356,7 +364,7 @@ export function DashboardShell() {
                 <button
                   type="button"
                   onClick={() => void triggerRefresh(true, true)}
-                  className="btn-playful-gradient mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-2xl px-4 text-sm font-semibold"
+                  className="btn-primary-accent mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 text-sm font-semibold"
                 >
                   <RefreshCw className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
                   <span>Coba Muat Ulang</span>
@@ -374,13 +382,13 @@ export function DashboardShell() {
             {statusError ? (
               <div
                 role="alert"
-                className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-[var(--warning-border)] bg-[var(--warning-bg)] px-4 py-2.5 text-xs font-medium text-[var(--warning-fg)]"
+                className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-[var(--warning-border)] bg-[var(--warning-bg)] px-4 py-2.5 text-xs font-medium text-[var(--warning-fg)]"
               >
                 <span>{statusError}</span>
                 <button
                   type="button"
                   onClick={() => void triggerRefresh(true, true)}
-                  className="min-h-[34px] shrink-0 rounded-xl border border-[var(--warning-border)] px-3 font-semibold hover:opacity-85"
+                  className="min-h-[34px] shrink-0 rounded-lg border border-[var(--warning-border)] px-3 font-semibold hover:opacity-85"
                 >
                   Coba Sekarang
                 </button>
@@ -427,7 +435,7 @@ export function DashboardShell() {
       <nav
         aria-label="Navigasi ponsel"
         role="tablist"
-        className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-2 rounded-t-2xl border-t border-[var(--border-subtle)] bg-[var(--surface)]/95 shadow-2xl backdrop-blur-md sm:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-2 border-t border-[var(--border-subtle)] bg-[var(--surface)] shadow-2xl sm:hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
         <button
@@ -436,10 +444,10 @@ export function DashboardShell() {
           aria-selected={activeTab === "attendance"}
           aria-controls="panel-attendance"
           onClick={() => setActiveTab("attendance")}
-          className={`flex min-h-[60px] flex-col items-center justify-center gap-1 px-2 text-xs font-semibold transition-colors ${
+          className={`flex min-h-[60px] flex-col items-center justify-center gap-1 border-t-2 px-2 text-xs font-semibold transition-colors ${
             activeTab === "attendance"
-              ? "text-[var(--accent)]"
-              : "text-[var(--ink-muted)]"
+              ? "border-[var(--accent)] text-[var(--accent)]"
+              : "border-transparent text-[var(--ink-muted)]"
           }`}
         >
           <BellRing className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
@@ -452,10 +460,10 @@ export function DashboardShell() {
           aria-selected={activeTab === "itinerary"}
           aria-controls="panel-itinerary"
           onClick={() => setActiveTab("itinerary")}
-          className={`flex min-h-[60px] flex-col items-center justify-center gap-1 px-2 text-xs font-semibold transition-colors ${
+          className={`flex min-h-[60px] flex-col items-center justify-center gap-1 border-t-2 px-2 text-xs font-semibold transition-colors ${
             activeTab === "itinerary"
-              ? "text-[var(--accent)]"
-              : "text-[var(--ink-muted)]"
+              ? "border-[var(--accent)] text-[var(--accent)]"
+              : "border-transparent text-[var(--ink-muted)]"
           }`}
         >
           <CalendarPlus className="h-5 w-5" strokeWidth={2} aria-hidden="true" />

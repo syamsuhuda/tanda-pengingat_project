@@ -44,12 +44,12 @@ const TIMELINE_META: Record<
   waiting: {
     label: "Menunggu",
     className:
-      "border-[var(--border-subtle)] bg-[var(--surface-elevated)] text-[var(--ink)]",
+      "border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--ink-muted)]",
   },
   cancelled: {
     label: "Dibatalkan",
     className:
-      "border-[var(--border-subtle)] bg-[var(--surface-elevated)] text-[var(--ink-muted)]",
+      "border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--ink-muted)]",
   },
   paused: {
     label: "Dijeda",
@@ -128,7 +128,7 @@ export function AttendanceTab({
 
       setStatusFeedback({
         type: "success",
-        text: body.message ?? "Yeay! Absen hari ini berhasil ditandai.",
+        text: body.message ?? "Absen hari ini berhasil ditandai.",
       });
       await onRefresh();
     } catch {
@@ -173,7 +173,7 @@ export function AttendanceTab({
 
       setStatusFeedback({
         type: "success",
-        text: body.message ?? "Status libur diperbarui!",
+        text: body.message ?? "Status libur diperbarui.",
       });
       await onRefresh();
     } catch {
@@ -210,7 +210,7 @@ export function AttendanceTab({
       setClearSentLocks(false);
       setStatusFeedback({
         type: "success",
-        text: body.message ?? "Status absen hari ini berhasil direset.",
+        text: body.message ?? "Status absen hari ini direset.",
       });
       await onRefresh();
     } catch {
@@ -250,7 +250,7 @@ export function AttendanceTab({
       setPauseNoteDirty(false);
       setStatusFeedback({
         type: "success",
-        text: body.message ?? "Pengaturan Mode Jeda Bot disimpan.",
+        text: body.message ?? "Mode Jeda Bot diperbarui.",
       });
       await onRefresh();
     } catch {
@@ -264,47 +264,47 @@ export function AttendanceTab({
     }
   }
 
-  const heroGlowClass = isConfirmed
-    ? "border-[var(--success-border)] shadow-[0_0_40px_-18px_rgba(52,211,153,0.45)]"
+  const heroBorderClass = isConfirmed
+    ? "border-[var(--success-border)]"
     : isTodayOff
-      ? "border-[var(--off-border)] shadow-[0_0_40px_-18px_rgba(56,189,248,0.4)]"
-      : "border-[var(--border-subtle)] shadow-[0_0_40px_-18px_rgba(251,113,133,0.3)]";
+      ? "border-[var(--off-border)]"
+      : "border-[var(--border-subtle)]";
 
   return (
     <div className="space-y-5">
       <section
         aria-labelledby="today-status-heading"
-        className={`rounded-3xl border bg-[var(--surface)] p-5 sm:p-6 ${heroGlowClass}`}
+        className={`rounded-2xl border bg-[var(--surface)] p-5 shadow-xs sm:p-6 ${heroBorderClass}`}
       >
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-mono-num rounded-full bg-[var(--surface-elevated)] px-3 py-1 text-xs font-medium text-[var(--ink-muted)]">
+              <span className="font-mono-num rounded-md bg-[var(--surface-elevated)] px-2.5 py-1 text-xs font-medium text-[var(--ink-muted)]">
                 {data.todayFormatted}
               </span>
-              <span className="rounded-full bg-[var(--accent-tint)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
+              <span className="rounded-md bg-[var(--surface-elevated)] px-2.5 py-1 text-xs font-semibold text-[var(--ink)]">
                 Untuk {data.recipient.name}
               </span>
               {pauseDraft ? (
-                <span className="inline-flex items-center gap-1 rounded-full border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-1 text-xs font-semibold text-[var(--warning-fg)]">
+                <span className="inline-flex items-center gap-1 rounded-md border border-[var(--warning-border)] bg-[var(--warning-bg)] px-2.5 py-1 text-xs font-semibold text-[var(--warning-fg)]">
                   <PauseCircle className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
                   <span>Bot Dijeda</span>
                 </span>
               ) : null}
             </div>
 
-            <div className="flex items-center gap-3 pt-1">
+            <div className="flex items-center gap-3.5 pt-1">
               {isConfirmed ? (
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--success-bg)] text-[var(--success-fg)]">
-                  <CheckCircle2 className="h-7 w-7" strokeWidth={2} aria-hidden="true" />
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--success-bg)] text-[var(--success-fg)]">
+                  <CheckCircle2 className="h-6 w-6" strokeWidth={2} aria-hidden="true" />
                 </div>
               ) : isTodayOff ? (
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--off-bg)] text-[var(--off-fg)]">
-                  <CalendarOff className="h-7 w-7" strokeWidth={2} aria-hidden="true" />
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--off-bg)] text-[var(--off-fg)]">
+                  <CalendarOff className="h-6 w-6" strokeWidth={2} aria-hidden="true" />
                 </div>
               ) : (
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--warning-bg)] text-[var(--warning-fg)]">
-                  <Clock className="h-7 w-7" strokeWidth={2} aria-hidden="true" />
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--warning-bg)] text-[var(--warning-fg)]">
+                  <Clock className="h-6 w-6" strokeWidth={2} aria-hidden="true" />
                 </div>
               )}
 
@@ -322,19 +322,19 @@ export function AttendanceTab({
                 <p className="text-xs leading-relaxed text-[var(--ink-muted)] sm:text-sm">
                   {data.attendance ? (
                     <>
-                      Terkonfirmasi pukul{" "}
+                      Tercatat pukul{" "}
                       <strong className="font-mono-num text-[var(--ink)]">
                         {formatIsoToWibTime(data.attendance.confirmedAt)}
                       </strong>{" "}
-                      ({data.attendance.confirmedBy === "email_link" ? "lewat email" : "manual dashboard"}).
+                      ({data.attendance.confirmedBy === "email_link" ? "lewat tautan email" : "manual dashboard"}).
                     </>
                   ) : isTodayOff ? (
                     <>
-                      Bot libur kirim hari ini{data.todayOffDay.note ? ` (${data.todayOffDay.note})` : ""}.
+                      Pengingat otomatis off hari ini{data.todayOffDay.note ? ` (${data.todayOffDay.note})` : ""}.
                     </>
                   ) : (
                     <>
-                      Jadwal aktif hari ini:{" "}
+                      Jadwal aktif:{" "}
                       <span className="font-mono-num font-medium text-[var(--ink)]">
                         {activeStageTimesText || "tidak ada"}
                       </span>
@@ -345,13 +345,13 @@ export function AttendanceTab({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:w-[480px]">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:w-[460px]">
             {data.timeline.map((item) => {
               const badge = TIMELINE_META[item.status];
               return (
                 <div
                   key={item.stage}
-                  className="flex items-center justify-between gap-2 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3.5 py-2.5 sm:flex-col sm:items-start sm:gap-1.5"
+                  className="flex items-center justify-between gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3.5 py-2.5 sm:flex-col sm:items-start sm:gap-1.5"
                 >
                   <div>
                     <p className="font-mono-num text-xs font-bold text-[var(--ink)]">
@@ -359,7 +359,7 @@ export function AttendanceTab({
                     </p>
                     <p className="text-[11px] text-[var(--ink-muted)]">
                       {item.stage === "morning"
-                        ? "Pagi + .ics"
+                        ? "Pagi + Kalender"
                         : item.stage === "afternoon"
                           ? "Cek Sore"
                           : "Urgent + Alert"}
@@ -367,7 +367,7 @@ export function AttendanceTab({
                   </div>
 
                   <span
-                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${badge.className}`}
+                    className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold ${badge.className}`}
                   >
                     {item.status === "sent" ? (
                       <Check className="h-3 w-3" strokeWidth={2.2} aria-hidden="true" />
@@ -393,7 +393,7 @@ export function AttendanceTab({
         {statusFeedback ? (
           <div
             role={statusFeedback.type === "error" ? "alert" : "status"}
-            className={`mt-4 flex items-start gap-2 rounded-2xl border px-3.5 py-2.5 text-sm ${
+            className={`mt-4 flex items-start gap-2 rounded-xl border px-3.5 py-2.5 text-sm ${
               statusFeedback.type === "error"
                 ? "border-[var(--danger-border)] bg-[var(--danger-bg)] text-[var(--danger-fg)]"
                 : "border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-fg)]"
@@ -408,13 +408,13 @@ export function AttendanceTab({
           </div>
         ) : null}
 
-        <div className="mt-5 flex flex-wrap items-center gap-2.5 border-t border-[var(--border-subtle)] pt-4">
+        <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-[var(--border-subtle)] pt-4">
           <button
             type="button"
             onClick={() => setManualModalOpen(true)}
-            className="btn-playful-gradient inline-flex min-h-[46px] items-center justify-center gap-2 rounded-2xl px-5 text-sm font-bold shadow-sm transition-all active:scale-[0.98]"
+            className="btn-primary-accent inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold transition-colors active:scale-[0.98]"
           >
-            <Send className="h-4 w-4" strokeWidth={2.1} aria-hidden="true" />
+            <Send className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
             <span>Kirim Pengingat Sekarang</span>
           </button>
 
@@ -423,7 +423,7 @@ export function AttendanceTab({
               type="button"
               onClick={() => void handleManualConfirmToday()}
               disabled={confirmingManual}
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-2xl border border-[var(--success-border)] bg-[var(--success-bg)] px-4 text-xs font-bold text-[var(--success-fg)] transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-60"
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-[var(--success-border)] bg-[var(--success-bg)] px-3.5 text-xs font-bold text-[var(--success-fg)] transition-opacity hover:opacity-90 active:scale-[0.98] disabled:opacity-60"
             >
               <CheckCircle2 className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
               <span>{confirmingManual ? "Menyimpan..." : "Tandai Sudah Absen"}</span>
@@ -432,7 +432,7 @@ export function AttendanceTab({
             <button
               type="button"
               onClick={() => setResetDialogOpen(true)}
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-2xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-xs font-semibold text-[var(--ink)] transition-all hover:bg-[var(--surface-muted)] active:scale-[0.98]"
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-xs font-semibold text-[var(--ink)] transition-colors hover:bg-[var(--surface-muted)] active:scale-[0.98]"
             >
               <RotateCcw className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
               <span>Reset Status</span>
@@ -443,7 +443,7 @@ export function AttendanceTab({
             type="button"
             disabled={quickOffBusy !== null}
             onClick={() => void toggleQuickOffDay("today")}
-            className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-2xl border px-3.5 text-xs font-semibold transition-all active:scale-[0.98] disabled:opacity-50 ${
+            className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border px-3.5 text-xs font-semibold transition-colors active:scale-[0.98] disabled:opacity-50 ${
               isTodayOff
                 ? "border-[var(--off-border)] bg-[var(--off-bg)] text-[var(--off-fg)]"
                 : "border-[var(--border-control)] bg-[var(--surface-elevated)] text-[var(--ink)] hover:bg-[var(--surface-muted)]"
@@ -463,7 +463,7 @@ export function AttendanceTab({
             type="button"
             disabled={quickOffBusy !== null}
             onClick={() => void toggleQuickOffDay("tomorrow")}
-            className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-2xl border px-3.5 text-xs font-semibold transition-all active:scale-[0.98] disabled:opacity-50 ${
+            className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border px-3.5 text-xs font-semibold transition-colors active:scale-[0.98] disabled:opacity-50 ${
               isTomorrowOff
                 ? "border-[var(--off-border)] bg-[var(--off-bg)] text-[var(--off-fg)]"
                 : "border-[var(--border-control)] bg-[var(--surface-elevated)] text-[var(--ink)] hover:bg-[var(--surface-muted)]"
@@ -479,7 +479,7 @@ export function AttendanceTab({
             </span>
           </button>
 
-          <div className="ml-auto flex items-center gap-2.5 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] py-1.5 pr-2 pl-3">
+          <div className="ml-auto flex items-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] py-1.5 pr-2 pl-3">
             <button
               type="button"
               onClick={() => setPauseNoteExpanded((prev) => !prev)}
@@ -514,7 +514,7 @@ export function AttendanceTab({
         </div>
 
         {pauseNoteExpanded || pauseDraft ? (
-          <div className="mt-3 flex flex-col gap-2 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-3 sm:flex-row sm:items-center">
+          <div className="mt-3 flex flex-col gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-3 sm:flex-row sm:items-center">
             <label htmlFor="quick-pause-note" className="sr-only">
               Catatan jeda bot
             </label>
@@ -527,16 +527,16 @@ export function AttendanceTab({
                 setPauseNote(event.target.value);
                 setPauseNoteDirty(true);
               }}
-              placeholder="Catatan jeda opsional (mis. Cuti panjang sampai Senin)"
-              className="min-h-[40px] flex-1 rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-3 text-xs text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
+              placeholder="Catatan jeda opsional (mis. Cuti sampai Senin)"
+              className="min-h-[40px] flex-1 rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-3 text-xs text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
             />
             <button
               type="button"
               disabled={savingPause}
               onClick={() => void savePauseConfig(pauseDraft, pauseNote)}
-              className="min-h-[40px] shrink-0 rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-3.5 text-xs font-semibold text-[var(--ink)] hover:bg-[var(--surface-muted)] disabled:opacity-50"
+              className="min-h-[40px] shrink-0 rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-3.5 text-xs font-semibold text-[var(--ink)] hover:bg-[var(--surface-muted)] disabled:opacity-50"
             >
-              {savingPause ? "Menyimpan..." : "Simpan Catatan Jeda"}
+              {savingPause ? "Menyimpan..." : "Simpan Catatan"}
             </button>
           </div>
         ) : null}
@@ -591,7 +591,7 @@ export function AttendanceTab({
         extraContent={
           <label
             htmlFor="reset-clear-locks"
-            className="flex min-h-[44px] items-start gap-2.5 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-3 text-xs leading-relaxed text-[var(--ink)]"
+            className="flex min-h-[44px] items-start gap-2.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-3 text-xs leading-relaxed text-[var(--ink)]"
           >
             <input
               id="reset-clear-locks"

@@ -25,7 +25,7 @@ const HALF_HOUR_OPTIONS: string[] = Array.from({ length: 48 }, (_, index) => {
 });
 
 const STAGE_ROWS: Array<{ stage: AttendanceStage; title: string }> = [
-  { stage: "morning", title: "Pagi + Kalender .ics" },
+  { stage: "morning", title: "Pagi + Kalender" },
   { stage: "afternoon", title: "Cek Sore" },
   { stage: "urgent", title: "Urgent + Eskalasi" },
 ];
@@ -145,7 +145,7 @@ export function BotSettingsCard({
       setRecipientDirty(false);
       setRecipientFeedback({
         type: "success",
-        text: body.message ?? "Data penerima diperbarui!",
+        text: body.message ?? "Data penerima diperbarui.",
       });
       await onRecipientUpdated(body.data);
     } catch {
@@ -184,7 +184,7 @@ export function BotSettingsCard({
       setScheduleDirty(false);
       setScheduleFeedback({
         type: "success",
-        text: body.message ?? "Jadwal kirim diperbarui!",
+        text: body.message ?? "Jadwal kirim diperbarui.",
       });
       await onScheduleChanged();
     } catch {
@@ -200,12 +200,12 @@ export function BotSettingsCard({
   return (
     <section
       aria-labelledby="bot-settings-heading"
-      className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-sm sm:p-6"
+      className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-xs sm:p-6"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2
           id="bot-settings-heading"
-          className="font-display text-lg font-semibold text-[var(--ink)] sm:text-xl"
+          className="font-display text-lg font-semibold text-[var(--ink)]"
         >
           Pengaturan Bot
         </h2>
@@ -213,14 +213,14 @@ export function BotSettingsCard({
         <div
           role="tablist"
           aria-label="Sub-tab pengaturan bot"
-          className="grid grid-cols-2 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-1"
+          className="grid grid-cols-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-1"
         >
           <button
             type="button"
             role="tab"
             aria-selected={subTab === "recipient"}
             onClick={() => setSubTab("recipient")}
-            className={`inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-semibold transition-all ${
+            className={`inline-flex min-h-[36px] items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-colors ${
               subTab === "recipient"
                 ? "bg-[var(--surface)] text-[var(--ink)] shadow-xs"
                 : "text-[var(--ink-muted)] hover:text-[var(--ink)]"
@@ -235,7 +235,7 @@ export function BotSettingsCard({
             role="tab"
             aria-selected={subTab === "schedule"}
             onClick={() => setSubTab("schedule")}
-            className={`inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-semibold transition-all ${
+            className={`inline-flex min-h-[36px] items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-colors ${
               subTab === "schedule"
                 ? "bg-[var(--surface)] text-[var(--ink)] shadow-xs"
                 : "text-[var(--ink-muted)] hover:text-[var(--ink)]"
@@ -269,7 +269,7 @@ export function BotSettingsCard({
                   if (recipientFeedback) setRecipientFeedback(null);
                 }}
                 placeholder="Nama panggilan"
-                className="mt-1 min-h-[44px] w-full rounded-2xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-sm text-[var(--ink)]"
+                className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-sm text-[var(--ink)]"
               />
             </div>
 
@@ -292,22 +292,22 @@ export function BotSettingsCard({
                   if (recipientFeedback) setRecipientFeedback(null);
                 }}
                 placeholder="nama@email.com"
-                className="mt-1 min-h-[44px] w-full rounded-2xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-sm text-[var(--ink)]"
+                className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-sm text-[var(--ink)]"
               />
             </div>
           </div>
 
           <p className="flex items-center gap-1.5 text-xs text-[var(--ink-muted)]">
-            <Mail className="h-3.5 w-3.5 shrink-0 text-[var(--accent)]" strokeWidth={1.9} aria-hidden="true" />
+            <Mail className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} aria-hidden="true" />
             <span>
-              Sapaan di email: <strong className="text-[var(--ink)]">Pagi, {name.trim() || "Nama"}!</strong> (otomatis sinkron ke Date Itinerary)
+              Sapaan email: <strong className="text-[var(--ink)]">Pagi, {name.trim() || "Nama"}!</strong> (sinkron ke Date Itinerary)
             </span>
           </p>
 
           {recipientFeedback ? (
             <div
               role={recipientFeedback.type === "error" ? "alert" : "status"}
-              className={`flex items-start gap-2 rounded-2xl border px-3 py-2 text-xs font-medium ${
+              className={`flex items-start gap-2 rounded-xl border px-3 py-2 text-xs font-medium ${
                 recipientFeedback.type === "error"
                   ? "border-[var(--danger-border)] bg-[var(--danger-bg)] text-[var(--danger-fg)]"
                   : "border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-fg)]"
@@ -325,7 +325,7 @@ export function BotSettingsCard({
           <button
             type="submit"
             disabled={savingRecipient}
-            className="btn-playful-gradient inline-flex min-h-[44px] w-full items-center justify-center rounded-2xl px-4 text-sm font-semibold shadow-sm transition-all active:scale-[0.98] disabled:opacity-60 sm:w-auto"
+            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-[var(--ink)] px-4 text-sm font-semibold text-[var(--bg)] transition-opacity hover:opacity-90 active:scale-[0.98] disabled:opacity-60 sm:w-auto"
           >
             {savingRecipient ? "Menyimpan..." : "Simpan Penerima"}
           </button>
@@ -341,7 +341,7 @@ export function BotSettingsCard({
             return (
               <div
                 key={row.stage}
-                className={`flex items-center justify-between gap-2 rounded-2xl border px-3.5 py-2.5 transition-colors ${
+                className={`flex items-center justify-between gap-2 rounded-xl border px-3.5 py-2 transition-colors ${
                   cfg.enabled
                     ? "border-[var(--border-subtle)] bg-[var(--surface-elevated)]"
                     : "border-[var(--border-subtle)] bg-[var(--surface-muted)] opacity-75"
@@ -367,7 +367,7 @@ export function BotSettingsCard({
                       setScheduleDirty(true);
                       if (scheduleFeedback) setScheduleFeedback(null);
                     }}
-                    className="font-mono-num min-h-[40px] rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-2.5 text-xs font-semibold text-[var(--ink)] disabled:opacity-50"
+                    className="font-mono-num min-h-[40px] rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-2.5 text-xs font-semibold text-[var(--ink)] disabled:opacity-50"
                   >
                     {options.map((slot) => (
                       <option key={slot} value={slot}>
@@ -414,7 +414,7 @@ export function BotSettingsCard({
           {scheduleValidationError ? (
             <div
               role="alert"
-              className="flex items-start gap-2 rounded-2xl border border-[var(--danger-border)] bg-[var(--danger-bg)] px-3 py-2 text-xs font-medium text-[var(--danger-fg)]"
+              className="flex items-start gap-2 rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] px-3 py-2 text-xs font-medium text-[var(--danger-fg)]"
             >
               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.9} aria-hidden="true" />
               <span>{scheduleValidationError}</span>
@@ -424,7 +424,7 @@ export function BotSettingsCard({
           {scheduleFeedback ? (
             <div
               role={scheduleFeedback.type === "error" ? "alert" : "status"}
-              className={`flex items-start gap-2 rounded-2xl border px-3 py-2 text-xs font-medium ${
+              className={`flex items-start gap-2 rounded-xl border px-3 py-2 text-xs font-medium ${
                 scheduleFeedback.type === "error"
                   ? "border-[var(--danger-border)] bg-[var(--danger-bg)] text-[var(--danger-fg)]"
                   : "border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-fg)]"
@@ -442,7 +442,7 @@ export function BotSettingsCard({
           <button
             type="submit"
             disabled={savingSchedule || Boolean(scheduleValidationError)}
-            className="btn-playful-gradient inline-flex min-h-[44px] w-full items-center justify-center rounded-2xl px-4 text-sm font-semibold shadow-sm transition-all active:scale-[0.98] disabled:opacity-50 sm:w-auto"
+            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-[var(--ink)] px-4 text-sm font-semibold text-[var(--bg)] transition-opacity hover:opacity-90 active:scale-[0.98] disabled:opacity-50 sm:w-auto"
           >
             {savingSchedule ? "Menyimpan..." : "Simpan Jadwal"}
           </button>

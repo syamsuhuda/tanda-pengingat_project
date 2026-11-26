@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, Check, Mail, Send, Sparkles, X } from "lucide-react";
+import { AlertCircle, Mail, Send, X } from "lucide-react";
 
 interface ManualTriggerModalProps {
   open: boolean;
@@ -62,7 +62,7 @@ export function ManualTriggerModal({
     if (isAlreadyConfirmed && !forceSend) {
       setFeedback({
         type: "error",
-        text: "Hari ini sudah tercatat absen. Centang konfirmasi kirim ulang di bawah jika tetap ingin mengirim.",
+        text: "Hari ini sudah tercatat absen. Centang konfirmasi kirim ulang jika tetap ingin mengirim.",
       });
       return;
     }
@@ -97,7 +97,7 @@ export function ManualTriggerModal({
 
       setFeedback({
         type: "success",
-        text: body.message ?? `Pengingat terkirim ke ${recipientName}!`,
+        text: body.message ?? `Pengingat terkirim ke ${recipientName}.`,
       });
       await onSent();
       setTimeout(() => {
@@ -115,7 +115,7 @@ export function ManualTriggerModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/65 p-0 backdrop-blur-xs sm:items-center sm:p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/65 p-0 sm:items-center sm:p-4"
       role="presentation"
       onClick={(event) => {
         if (event.target === event.currentTarget && !submitting) {
@@ -127,22 +127,18 @@ export function ManualTriggerModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="manual-trigger-title"
-        className="w-full max-w-lg rounded-t-3xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-2xl sm:rounded-3xl sm:p-6"
+        className="w-full max-w-lg rounded-t-2xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-2xl sm:rounded-2xl sm:p-6"
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="inline-flex items-center gap-1.5 rounded-full bg-[var(--accent-tint)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
-              <Sparkles className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-              <span>Kirim Instan</span>
-            </div>
             <h2
               id="manual-trigger-title"
-              className="font-display mt-2 text-xl font-semibold text-[var(--ink)]"
+              className="font-display text-xl font-semibold text-[var(--ink)]"
             >
               Kirim Pengingat ke {recipientName}
             </h2>
             <p className="mt-0.5 text-xs text-[var(--ink-muted)]">
-              Tujuan: {recipientEmail} ({todayWib})
+              {recipientEmail} · {todayWib}
             </p>
           </div>
 
@@ -151,7 +147,7 @@ export function ManualTriggerModal({
             onClick={onClose}
             disabled={submitting}
             aria-label="Tutup modal kirim pengingat"
-            className="-mt-1 -mr-1 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl text-[var(--ink-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--ink)] disabled:opacity-50"
+            className="-mt-1 -mr-1 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-[var(--ink-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--ink)] disabled:opacity-50"
           >
             <X className="h-5 w-5" strokeWidth={1.9} aria-hidden="true" />
           </button>
@@ -164,7 +160,7 @@ export function ManualTriggerModal({
                 htmlFor="modal-manual-note"
                 className="text-sm font-semibold text-[var(--ink)]"
               >
-                Pesan pribadi (opsional)
+                Catatan pribadi (opsional)
               </label>
               {note ? (
                 <button
@@ -188,14 +184,14 @@ export function ManualTriggerModal({
                 setNote(event.target.value);
                 setNoteTouched(true);
               }}
-              placeholder="Contoh: Jangan lupa absen sebelum rapat jam 10 ya!"
-              className="mt-1.5 w-full rounded-2xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 py-2.5 text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
+              placeholder="Contoh: Jangan lupa absen sebelum rapat jam 10 ya."
+              className="mt-1.5 w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 py-2.5 text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
             />
           </div>
 
           <label
             htmlFor="modal-include-ics"
-            className="flex min-h-[44px] items-center gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3.5 py-2.5 text-sm text-[var(--ink)]"
+            className="flex min-h-[44px] items-center gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3.5 py-2.5 text-sm text-[var(--ink)]"
           >
             <input
               id="modal-include-ics"
@@ -204,13 +200,13 @@ export function ManualTriggerModal({
               onChange={(event) => setIncludeIcs(event.target.checked)}
               className="h-5 w-5 shrink-0 accent-[var(--accent)]"
             />
-            <span>Sertakan undangan kalender (.ics) &amp; tombol Google Calendar</span>
+            <span>Sertakan undangan kalender &amp; tombol Google Calendar</span>
           </label>
 
           {isAlreadyConfirmed ? (
             <label
               htmlFor="modal-force-send"
-              className="flex min-h-[44px] items-start gap-3 rounded-2xl border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3.5 py-2.5 text-xs leading-relaxed font-medium text-[var(--warning-fg)]"
+              className="flex min-h-[44px] items-start gap-3 rounded-xl border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3.5 py-2.5 text-xs leading-relaxed font-medium text-[var(--warning-fg)]"
             >
               <input
                 id="modal-force-send"
@@ -228,7 +224,7 @@ export function ManualTriggerModal({
           {feedback ? (
             <div
               role={feedback.type === "error" ? "alert" : "status"}
-              className={`flex items-start gap-2 rounded-2xl border px-3.5 py-2.5 text-sm ${
+              className={`flex items-start gap-2 rounded-xl border px-3.5 py-2.5 text-sm ${
                 feedback.type === "error"
                   ? "border-[var(--danger-border)] bg-[var(--danger-bg)] text-[var(--danger-fg)]"
                   : "border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-fg)]"
@@ -248,14 +244,14 @@ export function ManualTriggerModal({
               type="button"
               onClick={onClose}
               disabled={submitting}
-              className="min-h-[44px] rounded-2xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-4 text-sm font-semibold text-[var(--ink)] hover:bg-[var(--surface-muted)] disabled:opacity-50"
+              className="min-h-[44px] rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-4 text-sm font-semibold text-[var(--ink)] hover:bg-[var(--surface-muted)] disabled:opacity-50"
             >
               Batal
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="btn-playful-gradient inline-flex min-h-[46px] items-center justify-center gap-2 rounded-2xl px-5 text-sm font-semibold shadow-sm transition-all active:scale-[0.98] disabled:opacity-60"
+              className="btn-primary-accent inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-5 text-sm font-bold transition-colors active:scale-[0.98] disabled:opacity-60"
             >
               {submitting ? (
                 <span>Mengirim...</span>

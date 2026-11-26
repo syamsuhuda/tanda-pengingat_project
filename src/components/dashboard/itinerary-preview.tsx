@@ -37,48 +37,66 @@ export function ItineraryPreview({
 }: ItineraryPreviewProps) {
   const icsLabel =
     sessions.length <= 1
-      ? "1 file .ics"
+      ? "1 file kalender"
       : icsMode === "separate"
-        ? `${sessions.length} file .ics terpisah`
-        : "1 file .ics gabungan";
+        ? `${sessions.length} file terpisah`
+        : "1 file gabungan";
+
+  const totalMinutes = sessions.reduce((acc, session) => {
+    if (
+      !isValidYmdDate(session.date) ||
+      !isValidHmTime(session.startTime) ||
+      !isValidHmTime(session.endTime) ||
+      session.startTime === session.endTime
+    ) {
+      return acc;
+    }
+    try {
+      const r = resolveWibSessionUtcRange(session.date, session.startTime, session.endTime);
+      return acc + r.durationMinutes;
+    } catch {
+      return acc;
+    }
+  }, 0);
 
   return (
     <aside
       aria-labelledby="itinerary-preview-heading"
-      className="overflow-hidden rounded-3xl border border-[var(--border-subtle)] bg-[var(--surface)] shadow-sm lg:sticky lg:top-20"
+      className="overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] shadow-xs lg:sticky lg:top-20"
     >
-      <div className="btn-playful-gradient px-5 py-4 sm:px-6">
+      <div className="border-b border-dashed border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-5 py-4 sm:px-6">
         <div className="flex items-center justify-between gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/20 px-2.5 py-0.5 text-[11px] font-bold">
+          <span className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] bg-[var(--surface)] px-2.5 py-0.5 text-[11px] font-bold text-[var(--accent)]">
             <Ticket className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-            <span>{mode === "date" ? "Date Ticket" : "Event Pass"}</span>
+            <span>{mode === "date" ? "Tiket Date" : "Tiket Acara"}</span>
           </span>
-          <span className="font-mono-num text-[11px] font-semibold opacity-90">
-            {sessions.length} sesi
+          <span className="font-mono-num text-[11px] font-semibold text-[var(--ink-muted)]">
+            {sessions.length} sesi{totalMinutes > 0 ? ` · ${formatDurationIndonesian(totalMinutes)}` : ""}
           </span>
         </div>
 
-        <h2 id="itinerary-preview-heading" className="font-display mt-2 text-xl font-bold">
-          {subject.trim() || "Judul Undangan Kamu"}
+        <h2
+          id="itinerary-preview-heading"
+          className="font-display mt-2.5 text-xl font-bold text-[var(--ink)]"
+        >
+          {subject.trim() || "Judul Rencana Kamu"}
         </h2>
 
-        <div className="mt-2.5 flex flex-wrap items-center gap-x-3.5 gap-y-1 text-xs font-medium opacity-95">
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-3.5 gap-y-1 text-xs font-medium text-[var(--ink-muted)]">
           <span className="inline-flex items-center gap-1">
-            <Users className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+            <Users className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden="true" />
             {mode === "date" ? `${partnerName} (1)` : `${recipientCount} teman`}
           </span>
           <span className="inline-flex items-center gap-1">
-            <Clock className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-            Alarm {alarmMinutes}m
+            <Clock className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden="true" />
+            Pengingat {alarmMinutes} mnt
           </span>
           <span className="inline-flex items-center gap-1">
-            <Paperclip className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+            <Paperclip className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden="true" />
             {icsLabel}
           </span>
         </div>
       </div>
-
-      <div className="border-b border-dashed border-[var(--border-subtle)]" />
 
       <ol className="space-y-3.5 p-5 sm:p-6">
         {sessions.map((session, index) => {
@@ -108,12 +126,12 @@ export function ItineraryPreview({
             >
               <span
                 aria-hidden="true"
-                className="font-mono-num btn-playful-gradient absolute top-0.5 left-0 inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold shadow-xs"
+                className="font-mono-num absolute top-0.5 left-0 inline-flex h-6 w-6 items-center justify-center rounded-full border border-[var(--border-subtle)] bg-[var(--surface-elevated)] text-xs font-bold text-[var(--ink)]"
               >
                 {index + 1}
               </span>
 
-              <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-3.5">
+              <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-3.5">
                 <p className="text-sm font-bold text-[var(--ink)]">
                   {session.title.trim() || `Sesi ${index + 1}`}
                 </p>
@@ -141,7 +159,7 @@ export function ItineraryPreview({
                   </p>
 
                   {rangeInfo?.crossesMidnight ? (
-                    <p className="inline-block rounded-full bg-[var(--warning-bg)] px-2.5 py-0.5 text-[11px] font-semibold text-[var(--warning-fg)]">
+                    <p className="inline-block rounded-md bg-[var(--warning-bg)] px-2 py-0.5 text-[11px] font-semibold text-[var(--warning-fg)]">
                       Lintas tengah malam (+1 hari, selesai{" "}
                       {formatWibDateShortIndonesian(rangeInfo.endDateWib)})
                     </p>

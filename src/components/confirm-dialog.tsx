@@ -52,11 +52,11 @@ export function ConfirmDialog({
   const confirmStyle =
     tone === "danger"
       ? "bg-red-600 text-white hover:bg-red-500"
-      : "btn-playful-gradient shadow-sm";
+      : "btn-primary-accent";
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/65 p-4 backdrop-blur-xs sm:items-center"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/65 p-4 sm:items-center"
       role="presentation"
       onClick={(event) => {
         if (event.target === event.currentTarget && !busy) {
@@ -69,7 +69,7 @@ export function ConfirmDialog({
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
         aria-describedby="confirm-dialog-description"
-        className="w-full max-w-md rounded-3xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-2xl sm:p-6"
+        className="w-full max-w-md rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-2xl sm:p-6"
       >
         <div className="flex items-start justify-between gap-3">
           <h2
@@ -83,7 +83,7 @@ export function ConfirmDialog({
             onClick={onCancel}
             disabled={busy}
             aria-label="Tutup dialog"
-            className="-mt-1.5 -mr-1.5 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl text-[var(--ink-muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--ink)] disabled:opacity-50"
+            className="-mt-1.5 -mr-1.5 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-[var(--ink-muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--ink)] disabled:opacity-50"
           >
             <X className="h-5 w-5" strokeWidth={1.9} aria-hidden="true" />
           </button>
@@ -104,7 +104,7 @@ export function ConfirmDialog({
             type="button"
             onClick={onCancel}
             disabled={busy}
-            className="min-h-[44px] rounded-2xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-4 text-sm font-semibold text-[var(--ink)] transition-all hover:bg-[var(--surface-muted)] active:scale-[0.98] disabled:opacity-50"
+            className="min-h-[44px] rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-4 text-sm font-semibold text-[var(--ink)] transition-colors hover:bg-[var(--surface-muted)] disabled:opacity-50"
           >
             {cancelLabel}
           </button>
@@ -112,7 +112,7 @@ export function ConfirmDialog({
             type="button"
             onClick={onConfirm}
             disabled={busy}
-            className={`min-h-[44px] rounded-2xl px-5 text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-60 ${confirmStyle}`}
+            className={`min-h-[44px] rounded-xl px-5 text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-60 ${confirmStyle}`}
           >
             {busy ? "Memproses..." : confirmLabel}
           </button>

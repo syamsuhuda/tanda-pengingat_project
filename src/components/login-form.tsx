@@ -192,7 +192,7 @@ export function LoginForm() {
       <button
         type="submit"
         disabled={submitting}
-        className="btn-playful-gradient inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-2xl px-5 text-sm font-bold shadow-sm transition-all active:scale-[0.98] disabled:opacity-60"
+        className="btn-primary-accent inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl px-5 text-sm font-bold transition-colors active:scale-[0.98] disabled:opacity-60"
       >
         <Lock className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
         <span>{submitting ? "Memeriksa PIN..." : "Masuk ke Dashboard"}</span>

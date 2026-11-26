@@ -42,20 +42,12 @@ export function ThemeToggle() {
       onClick={toggleTheme}
       aria-label={label}
       title={label}
-      className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl border border-[var(--border-control)] bg-[var(--surface)] px-3 text-sm font-medium text-[var(--ink)] transition-all duration-200 hover:bg-[var(--surface-muted)] active:scale-[0.96]"
+      className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-3 text-sm font-medium text-[var(--ink)] transition-colors hover:bg-[var(--surface-muted)] active:scale-[0.97]"
     >
       {mounted && theme === "light" ? (
-        <Moon
-          className="h-4 w-4 transition-transform duration-300"
-          strokeWidth={1.9}
-          aria-hidden="true"
-        />
+        <Moon className="h-4 w-4" strokeWidth={1.9} aria-hidden="true" />
       ) : (
-        <Sun
-          className="h-4 w-4 text-amber-300 transition-transform duration-300"
-          strokeWidth={1.9}
-          aria-hidden="true"
-        />
+        <Sun className="h-4 w-4 text-amber-300" strokeWidth={1.9} aria-hidden="true" />
       )}
     </button>
   );
