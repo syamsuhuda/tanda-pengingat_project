@@ -3,6 +3,7 @@ import {
   jsonOk,
   parseJsonBody,
   requireAuthenticatedSession,
+  withNoStore,
 } from "@/lib/api-helpers";
 import {
   appendActivityLog,
@@ -25,7 +26,7 @@ export async function GET() {
       a.localeCompare(b, "id"),
     );
 
-    return jsonOk("Daftar kontak berhasil dimuat.", { contacts, groups });
+    return withNoStore(jsonOk("Daftar kontak berhasil dimuat.", { contacts, groups }));
   } catch (error) {
     return handleRouteError(error, "Gagal memuat daftar kontak.");
   }

@@ -29,6 +29,8 @@ export function ConfirmDialog({
   onCancel,
 }: ConfirmDialogProps) {
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
+  const onCancelRef = useRef(onCancel);
+  onCancelRef.current = onCancel;
 
   useEffect(() => {
     if (!open) return;
@@ -37,13 +39,13 @@ export function ConfirmDialog({
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape" && !busy) {
         event.preventDefault();
-        onCancel();
+        onCancelRef.current();
       }
     }
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [open, busy, onCancel]);
+  }, [open, busy]);
 
   if (!open) {
     return null;
@@ -56,7 +58,7 @@ export function ConfirmDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/65 p-4 sm:items-center"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/65 p-0 sm:items-center sm:p-4"
       role="presentation"
       onClick={(event) => {
         if (event.target === event.currentTarget && !busy) {
@@ -69,7 +71,8 @@ export function ConfirmDialog({
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
         aria-describedby="confirm-dialog-description"
-        className="w-full max-w-md rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-2xl sm:p-6"
+        className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-t-3xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-2xl sm:rounded-2xl sm:p-6"
+        style={{ paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom, 0px))" }}
       >
         <div className="flex items-start justify-between gap-3">
           <h2

@@ -14,6 +14,7 @@ import type {
   IcsBundleMode,
   ItineraryMessageTone,
   ItineraryRecipientMode,
+  OtpPurpose,
   ResolvedItinerarySession,
 } from "./types";
 
@@ -129,9 +130,9 @@ export function buildAttendanceReminderEmail(params: {
   const cleanCustomMessage = params.customMessage?.trim() || null;
 
   const defaultTimeByStage: Record<AttendanceStage | "manual", string> = {
-    morning: "09.00 WIB",
-    afternoon: "15.00 WIB",
-    urgent: "20.30 WIB",
+    morning: "09:00 WIB",
+    afternoon: "15:00 WIB",
+    urgent: "20:30 WIB",
     manual: "",
   };
   const timeLabel = params.scheduledTimeWib?.trim() || defaultTimeByStage[params.stage];
@@ -317,7 +318,7 @@ export function buildEscalationEmail(params: {
   const dateLong = formatWibDateIndonesian(params.dateWib);
   const dateShort = formatWibDateShortIndonesian(params.dateWib);
   const recipientName = params.recipientName.trim();
-  const timeLabel = params.scheduledTimeWib?.trim() || "20.30 WIB";
+  const timeLabel = params.scheduledTimeWib?.trim() || "20:30 WIB";
 
   const subject = `[Eskalasi ${timeLabel}] Absen ${recipientName} hari ini belum dikonfirmasi (${dateShort})`;
   const heading = `Absen ${recipientName} hari ini belum dikonfirmasi`;
@@ -541,17 +542,25 @@ export function buildItineraryEmail(params: {
 }
 
 export function buildPinResetOtpEmail(params: {
+  purpose?: OtpPurpose;
   otp: string;
   requestedAtWibLabel: string;
   senderName: string;
 }): EmailContent {
+  const isChangePin = params.purpose === "change_pin";
   const safeOtp = escapeHtml(params.otp);
   const safeTime = escapeHtml(params.requestedAtWibLabel);
-  const subject = `[Keamanan] Kode Pemulihan PIN Dashboard (${params.otp})`;
+  const subject = isChangePin
+    ? `[Keamanan] Kode OTP Ubah PIN Dashboard (${params.otp})`
+    : `[Keamanan] Kode Pemulihan PIN Dashboard (${params.otp})`;
+  const heading = isChangePin ? "Konfirmasi Ubah PIN Dashboard" : "Reset PIN Akses Dashboard";
+  const actionPhrase = isChangePin
+    ? "mengubah PIN akses dashboard"
+    : "mereset PIN akses dashboard";
 
   const bodyHtml = `
     <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#334155;">
-      Kami menerima permintaan untuk mereset PIN akses dashboard pada <strong>${safeTime}</strong>.
+      Kami menerima permintaan untuk ${actionPhrase} pada <strong>${safeTime}</strong>.
     </p>
     <div style="margin:0 0 18px 0;padding:20px;border-radius:14px;background-color:#F8FAFC;border:1px dashed #CBD5E1;text-align:center;">
       <p style="margin:0 0 6px 0;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#64748B;">
@@ -566,15 +575,15 @@ export function buildPinResetOtpEmail(params: {
     </div>
     <div style="padding:14px 16px;border-radius:12px;background-color:#FFF1F2;border:1px solid #FECDD3;">
       <p style="margin:0;font-size:13px;line-height:1.55;color:#9F1239;">
-        <strong>Peringatan Keamanan:</strong> Jika bukan kamu yang meminta reset PIN, abaikan email ini. PIN saat ini tetap aman dan tidak berubah.
+        <strong>Peringatan Keamanan:</strong> Jika bukan kamu yang meminta kode OTP ini, abaikan email ini. PIN saat ini tetap aman dan tidak berubah.
       </p>
     </div>
   `;
 
   const html = renderEmailShell({
-    preheader: `Kode pemulihan PIN dashboard: ${params.otp} (berlaku 10 menit).`,
+    preheader: `${heading}: ${params.otp} (berlaku 10 menit).`,
     badgeText: "KEAMANAN AKUN",
-    heading: "Reset PIN Akses Dashboard",
+    heading,
     bannerBgFallback: "#1E293B",
     bannerBgGradient: "linear-gradient(135deg, #1E293B 0%, #4F46E5 100%)",
     badgeBg: "rgba(255,255,255,0.16)",
@@ -586,28 +595,33 @@ export function buildPinResetOtpEmail(params: {
   });
 
   const text = [
-    "Reset PIN Akses Dashboard",
+    heading,
     `Waktu permintaan: ${params.requestedAtWibLabel}`,
     "",
     `Kode Verifikasi 6 Digit: ${params.otp}`,
     "Kode berlaku selama 10 menit dan hanya dapat dipakai 1 kali.",
     "",
-    "Jika bukan kamu yang meminta reset PIN, abaikan email ini. PIN saat ini tetap aman.",
+    "Jika bukan kamu yang meminta kode OTP ini, abaikan email ini. PIN saat ini tetap aman.",
   ].join("\n");
 
   return { subject, text, html };
 }
 
 export function buildPinResetSuccessEmail(params: {
+  purpose?: OtpPurpose;
   resetAtWibLabel: string;
   senderName: string;
 }): EmailContent {
+  const isChangePin = params.purpose === "change_pin";
   const safeTime = escapeHtml(params.resetAtWibLabel);
-  const subject = "[Keamanan] PIN Dashboard Berhasil Diperbarui";
+  const subject = isChangePin
+    ? "[Keamanan] PIN Dashboard Berhasil Diubah"
+    : "[Keamanan] PIN Dashboard Berhasil Di-Reset";
+  const actionDesc = isChangePin ? "diubah menjadi PIN 6 digit baru" : "di-reset menjadi PIN 6 digit baru";
 
   const bodyHtml = `
     <p style="margin:0 0 14px 0;font-size:15px;line-height:1.6;color:#334155;">
-      PIN akses dashboard baru saja berhasil di-reset menjadi PIN 6 digit baru pada <strong>${safeTime}</strong>.
+      PIN akses dashboard baru saja berhasil ${actionDesc} pada <strong>${safeTime}</strong>.
     </p>
     <p style="margin:0 0 16px 0;font-size:14px;line-height:1.6;color:#475569;">
       Demi keamanan, seluruh sesi login lama di perangkat lain telah otomatis dikeluarkan.
@@ -620,7 +634,7 @@ export function buildPinResetSuccessEmail(params: {
   `;
 
   const html = renderEmailShell({
-    preheader: `PIN dashboard berhasil di-reset pada ${params.resetAtWibLabel}.`,
+    preheader: `PIN dashboard berhasil diperbarui pada ${params.resetAtWibLabel}.`,
     badgeText: "NOTIFIKASI KEAMANAN",
     heading: "PIN Dashboard Berhasil Diperbarui",
     bannerBgFallback: "#065F46",
@@ -637,7 +651,7 @@ export function buildPinResetSuccessEmail(params: {
     "PIN Dashboard Berhasil Diperbarui",
     `Waktu: ${params.resetAtWibLabel}`,
     "",
-    "PIN akses dashboard baru saja berhasil di-reset dan seluruh sesi lama di perangkat lain telah dikeluarkan.",
+    `PIN akses dashboard baru saja berhasil ${actionDesc} dan seluruh sesi lama di perangkat lain telah dikeluarkan.`,
     "Jika kamu tidak merasa melakukan perubahan ini, segera lakukan reset PIN ulang.",
   ].join("\n");
 

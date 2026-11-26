@@ -33,20 +33,25 @@ export function ContactsModal({
   } | null>(null);
 
   const nameInputRef = useRef<HTMLInputElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setConfirmDeleteId(null);
+      return;
+    }
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
       }
     }
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [open, onClose]);
+  }, [open]);
 
   const filteredContacts = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -175,7 +180,8 @@ export function ContactsModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="contacts-modal-title"
-        className="flex max-h-[90dvh] w-full max-w-2xl flex-col rounded-t-2xl border border-[var(--border-subtle)] bg-[var(--surface)] shadow-2xl sm:rounded-2xl"
+        className="flex max-h-[90dvh] w-full max-w-2xl flex-col rounded-t-3xl border border-[var(--border-subtle)] bg-[var(--surface)] shadow-2xl sm:rounded-2xl"
+        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
         <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-5 py-4">
           <div>
@@ -236,7 +242,7 @@ export function ContactsModal({
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   placeholder="Nama panggilan"
-                  className="mt-1 min-h-[44px] w-full rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
+                  className="mt-1 min-h-[44px] w-full rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-3 text-base text-[var(--ink)] placeholder:text-[var(--ink-muted)] sm:text-sm"
                 />
               </div>
 
@@ -255,7 +261,7 @@ export function ContactsModal({
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder="nama@email.com"
-                  className="mt-1 min-h-[44px] w-full rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
+                  className="mt-1 min-h-[44px] w-full rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-3 text-base text-[var(--ink)] placeholder:text-[var(--ink-muted)] sm:text-sm"
                 />
               </div>
 
@@ -275,7 +281,7 @@ export function ContactsModal({
                   value={group}
                   onChange={(event) => setGroup(event.target.value)}
                   placeholder="Kantor, Kuliah, Umum"
-                  className="mt-1 min-h-[44px] w-full rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
+                  className="mt-1 min-h-[44px] w-full rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-3 text-base text-[var(--ink)] placeholder:text-[var(--ink-muted)] sm:text-sm"
                 />
                 <datalist id="contact-group-suggestions">
                   {Array.from(
@@ -339,7 +345,7 @@ export function ContactsModal({
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
                   placeholder="Cari nama, email, atau grup..."
-                  className="min-h-[40px] w-full rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
+                  className="min-h-[44px] w-full rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-3 text-base text-[var(--ink)] placeholder:text-[var(--ink-muted)] sm:min-h-[40px] sm:text-sm"
                 />
               </div>
             </div>
@@ -383,7 +389,7 @@ export function ContactsModal({
                             type="button"
                             disabled={deletingId === contact.id}
                             onClick={() => void handleDelete(contact.id)}
-                            className="min-h-[44px] rounded-lg bg-[var(--danger-fg)] px-3 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                            className="min-h-[44px] rounded-lg bg-red-600 px-3 text-xs font-semibold text-white hover:bg-red-500 disabled:opacity-50"
                           >
                             {deletingId === contact.id ? "Menghapus..." : "Hapus"}
                           </button>

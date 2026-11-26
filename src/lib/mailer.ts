@@ -14,7 +14,7 @@ import {
   generateIcsCalendar,
   slugifyIcsFilename,
 } from "./ics";
-import { sanitizeSenderDisplayName } from "./security";
+import { sanitizeEmailHeaderValue, sanitizeSenderDisplayName } from "./security";
 import { getManualAttendanceSlot, resolveWibSessionUtcRange } from "./timezone";
 import type {
   AlarmMinutes,
@@ -23,6 +23,7 @@ import type {
   ItineraryMessageTone,
   ItineraryRecipientMode,
   ItinerarySessionInput,
+  OtpPurpose,
   RecipientAddress,
   ResolvedItinerarySession,
 } from "./types";
@@ -45,14 +46,15 @@ function createGmailTransporter() {
 }
 
 function formatAddress(recipient: RecipientAddress): string {
+  const safeEmail = sanitizeEmailHeaderValue(recipient.email, 160).replace(/\s+/g, "");
   if (!recipient.name?.trim()) {
-    return recipient.email;
+    return safeEmail;
   }
   const safeName = sanitizeSenderDisplayName(recipient.name, "");
   if (!safeName) {
-    return recipient.email;
+    return safeEmail;
   }
-  return `"${safeName}" <${recipient.email}>`;
+  return `"${safeName}" <${safeEmail}>`;
 }
 
 interface LayeredEmailParams {
@@ -90,10 +92,11 @@ async function sendLayeredEmail(params: LayeredEmailParams): Promise<LayeredEmai
   const transporter = createGmailTransporter();
   const safeFromName = sanitizeSenderDisplayName(params.fromName, env.SENDER_NAME);
 
+  const safeSubject = sanitizeEmailHeaderValue(params.subject, 180) || "Pengingat Jadwal";
   const mailOptions: Mail.Options = {
     from: `"${safeFromName}" <${env.GMAIL_USER}>`,
     to: params.to.map(formatAddress),
-    subject: params.subject,
+    subject: safeSubject,
     text: params.text,
     html: params.html,
     headers: params.entityRefId
@@ -428,6 +431,7 @@ export async function sendItineraryInvitation(params: {
 }
 
 export async function sendPinResetOtpEmail(params: {
+  purpose?: OtpPurpose;
   otp: string;
   requestedAtWibLabel: string;
   senderName?: string;
@@ -435,6 +439,7 @@ export async function sendPinResetOtpEmail(params: {
   const env = getEnv();
   const safeSenderName = sanitizeSenderDisplayName(params.senderName, env.SENDER_NAME);
   const email = buildPinResetOtpEmail({
+    purpose: params.purpose,
     otp: params.otp,
     requestedAtWibLabel: params.requestedAtWibLabel,
     senderName: safeSenderName,
@@ -446,17 +451,19 @@ export async function sendPinResetOtpEmail(params: {
     subject: email.subject,
     text: email.text,
     html: email.html,
-    entityRefId: `pin-otp-${crypto.randomUUID()}`,
+    entityRefId: `pin-otp-${params.purpose ?? "forgot_reset"}-${crypto.randomUUID()}`,
   });
 }
 
 export async function sendPinResetSuccessEmail(params: {
+  purpose?: OtpPurpose;
   resetAtWibLabel: string;
   senderName?: string;
 }): Promise<LayeredEmailResult> {
   const env = getEnv();
   const safeSenderName = sanitizeSenderDisplayName(params.senderName, env.SENDER_NAME);
   const email = buildPinResetSuccessEmail({
+    purpose: params.purpose,
     resetAtWibLabel: params.resetAtWibLabel,
     senderName: safeSenderName,
   });
@@ -467,6 +474,6 @@ export async function sendPinResetSuccessEmail(params: {
     subject: email.subject,
     text: email.text,
     html: email.html,
-    entityRefId: `pin-reset-${crypto.randomUUID()}`,
+    entityRefId: `pin-updated-${params.purpose ?? "forgot_reset"}-${crypto.randomUUID()}`,
   });
 }

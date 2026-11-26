@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { ContactsModal } from "@/components/dashboard/contacts-modal";
 import { ItineraryPreview } from "@/components/dashboard/itinerary-preview";
+import { TimePicker24h } from "@/components/ui/time-picker-24h";
 import {
   DATE_CATEGORY_PRESETS,
   DEFAULT_CATEGORY_BY_MODE,
@@ -801,14 +802,14 @@ export function ItineraryTab({
                 role="radio"
                 aria-checked={mode === "date"}
                 onClick={() => handleModeChange("date")}
-                className={`inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-3 text-xs font-semibold transition-colors sm:text-sm ${
+                className={`inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg px-2 text-[11px] font-semibold whitespace-nowrap transition-colors sm:gap-2 sm:px-3 sm:text-sm ${
                   mode === "date"
                     ? "bg-[var(--surface)] text-[var(--ink)] shadow-xs ring-1 ring-[var(--border-subtle)]"
                     : "text-[var(--ink-muted)] hover:text-[var(--ink)]"
                 }`}
               >
                 <Heart
-                  className={`h-4 w-4 ${mode === "date" ? "text-[var(--accent)]" : ""}`}
+                  className={`h-4 w-4 shrink-0 ${mode === "date" ? "text-[var(--accent)]" : ""}`}
                   strokeWidth={2}
                   aria-hidden="true"
                 />
@@ -820,14 +821,14 @@ export function ItineraryTab({
                 role="radio"
                 aria-checked={mode === "event"}
                 onClick={() => handleModeChange("event")}
-                className={`inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-3 text-xs font-semibold transition-colors sm:text-sm ${
+                className={`inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg px-2 text-[11px] font-semibold whitespace-nowrap transition-colors sm:gap-2 sm:px-3 sm:text-sm ${
                   mode === "event"
                     ? "bg-[var(--surface)] text-[var(--ink)] shadow-xs ring-1 ring-[var(--border-subtle)]"
                     : "text-[var(--ink-muted)] hover:text-[var(--ink)]"
                 }`}
               >
                 <CalendarDays
-                  className={`h-4 w-4 ${mode === "event" ? "text-[var(--accent)]" : ""}`}
+                  className={`h-4 w-4 shrink-0 ${mode === "event" ? "text-[var(--accent)]" : ""}`}
                   strokeWidth={2}
                   aria-hidden="true"
                 />
@@ -888,7 +889,7 @@ export function ItineraryTab({
                         }
                       }}
                       placeholder="Ketik email + Enter"
-                      className="min-h-[44px] min-w-0 flex-1 rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3 text-xs text-[var(--ink)] placeholder:text-[var(--ink-muted)] sm:text-sm"
+                      className="min-h-[44px] min-w-0 flex-1 rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3 text-base text-[var(--ink)] placeholder:text-[var(--ink-muted)] sm:text-sm"
                     />
                     <button
                       type="button"
@@ -915,14 +916,14 @@ export function ItineraryTab({
                       return (
                         <span
                           key={id}
-                          className="inline-flex items-center gap-1 rounded-lg border border-[var(--accent)] bg-[var(--accent-tint)] py-1 pr-1 pl-2.5 text-xs font-semibold text-[var(--ink)]"
+                          className="inline-flex max-w-full items-center gap-1 rounded-lg border border-[var(--accent)] bg-[var(--accent-tint)] py-1 pr-1 pl-2.5 text-xs font-semibold text-[var(--ink)]"
                         >
-                          <span>{c.name}</span>
+                          <span className="max-w-[180px] truncate sm:max-w-none">{c.name}</span>
                           <button
                             type="button"
                             onClick={() => toggleContact(id)}
                             aria-label={`Hapus ${c.name}`}
-                            className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-[var(--surface)]"
+                            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded hover:bg-[var(--surface)] sm:h-6 sm:w-6"
                           >
                             <X className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
                           </button>
@@ -932,14 +933,14 @@ export function ItineraryTab({
                     {drafts.event.manualEmails.map((email) => (
                       <span
                         key={email}
-                        className="inline-flex items-center gap-1 rounded-lg border border-[var(--border-control)] bg-[var(--surface-elevated)] py-1 pr-1 pl-2.5 text-xs font-medium text-[var(--ink)]"
+                        className="inline-flex max-w-full items-center gap-1 rounded-lg border border-[var(--border-control)] bg-[var(--surface-elevated)] py-1 pr-1 pl-2.5 text-xs font-medium text-[var(--ink)]"
                       >
-                        <span>{email}</span>
+                        <span className="max-w-[180px] truncate sm:max-w-none">{email}</span>
                         <button
                           type="button"
                           onClick={() => removeManualEmail(email)}
                           aria-label={`Hapus ${email}`}
-                          className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-[var(--surface)]"
+                          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded hover:bg-[var(--surface)] sm:h-6 sm:w-6"
                         >
                           <X className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
                         </button>
@@ -969,7 +970,7 @@ export function ItineraryTab({
             </div>
 
             {/* Session Strip Horizontal Scrollable */}
-            <div className="custom-scrollbar mt-3 flex items-center gap-2 overflow-x-auto pb-1">
+            <div className="custom-scrollbar mt-3 flex snap-x snap-mandatory items-center gap-2 overflow-x-auto pb-1">
               {activeDraft.sessions.map((session, idx) => {
                 const isSelected = idx === safeSessionIndex;
                 return (
@@ -982,7 +983,7 @@ export function ItineraryTab({
                         activeSessionIndex: idx,
                       }))
                     }
-                    className={`inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-xl border px-3 text-xs font-semibold transition-colors ${
+                    className={`inline-flex min-h-[44px] shrink-0 snap-start items-center gap-2 rounded-xl border px-3 text-xs font-semibold transition-colors ${
                       isSelected
                         ? "border-[var(--accent)] bg-[var(--accent-tint)] text-[var(--ink)]"
                         : "border-[var(--border-subtle)] bg-[var(--surface-elevated)] text-[var(--ink-muted)] hover:text-[var(--ink)]"
@@ -991,7 +992,7 @@ export function ItineraryTab({
                     <span
                       className={`font-mono-num inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold ${
                         isSelected
-                          ? "bg-[var(--accent)] text-white"
+                          ? "bg-[var(--accent)] text-[var(--accent-fg)]"
                           : "bg-[var(--surface)] text-[var(--ink)]"
                       }`}
                     >
@@ -1088,12 +1089,12 @@ export function ItineraryTab({
                         updateSession(activeSession.draftId, { title: event.target.value })
                       }
                       placeholder="Contoh: Ngopi sore / Makan malam / Meeting tim"
-                      className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
+                      className="mt-1 min-h-[44px] w-full min-w-0 rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-3 text-base text-[var(--ink)] placeholder:text-[var(--ink-muted)] sm:text-sm"
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-                    <div>
+                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                    <div className="col-span-2 sm:col-span-1">
                       <label
                         htmlFor={`session-date-${activeSession.draftId}`}
                         className="block text-xs font-semibold text-[var(--ink)]"
@@ -1108,7 +1109,7 @@ export function ItineraryTab({
                         onChange={(event) =>
                           updateSession(activeSession.draftId, { date: event.target.value })
                         }
-                        className="font-mono-num mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)]"
+                        className="font-mono-num mt-1 min-h-[44px] w-full min-w-0 max-w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-3 text-base text-[var(--ink)] sm:text-sm"
                       />
                     </div>
                     <div>
@@ -1116,17 +1117,16 @@ export function ItineraryTab({
                         htmlFor={`session-start-${activeSession.draftId}`}
                         className="block text-xs font-semibold text-[var(--ink)]"
                       >
-                        Mulai
+                        Mulai (24 Jam)
                       </label>
-                      <input
+                      <TimePicker24h
                         id={`session-start-${activeSession.draftId}`}
-                        type="time"
-                        required
                         value={activeSession.startTime}
-                        onChange={(event) =>
-                          updateSession(activeSession.draftId, { startTime: event.target.value })
+                        onChange={(nextHm) =>
+                          updateSession(activeSession.draftId, { startTime: nextHm })
                         }
-                        className="font-mono-num mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)]"
+                        ariaLabel="Jam mulai sesi"
+                        className="mt-1"
                       />
                     </div>
                     <div>
@@ -1134,17 +1134,16 @@ export function ItineraryTab({
                         htmlFor={`session-end-${activeSession.draftId}`}
                         className="block text-xs font-semibold text-[var(--ink)]"
                       >
-                        Selesai
+                        Selesai (24 Jam)
                       </label>
-                      <input
+                      <TimePicker24h
                         id={`session-end-${activeSession.draftId}`}
-                        type="time"
-                        required
                         value={activeSession.endTime}
-                        onChange={(event) =>
-                          updateSession(activeSession.draftId, { endTime: event.target.value })
+                        onChange={(nextHm) =>
+                          updateSession(activeSession.draftId, { endTime: nextHm })
                         }
-                        className="font-mono-num mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)]"
+                        ariaLabel="Jam selesai sesi"
+                        className="mt-1"
                       />
                     </div>
                   </div>
@@ -1168,7 +1167,7 @@ export function ItineraryTab({
                           })
                         }
                         placeholder="Nama kafe / kantor / titik temu"
-                        className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
+                        className="mt-1 min-h-[44px] w-full min-w-0 rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-3 text-base text-[var(--ink)] placeholder:text-[var(--ink-muted)] sm:text-sm"
                       />
                     </div>
                     <div>
@@ -1186,7 +1185,7 @@ export function ItineraryTab({
                           updateSession(activeSession.draftId, { mapsUrl: event.target.value })
                         }
                         placeholder="https://maps.google.com/..."
-                        className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
+                        className="mt-1 min-h-[44px] w-full min-w-0 rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-3 text-base text-[var(--ink)] placeholder:text-[var(--ink-muted)] sm:text-sm"
                       />
                     </div>
                   </div>
@@ -1209,7 +1208,7 @@ export function ItineraryTab({
                         })
                       }
                       placeholder="Dress code, titik kumpul, atau catatan singkat lainnya..."
-                      className="mt-1 w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
+                      className="mt-1 w-full min-w-0 rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-3 py-2 text-base text-[var(--ink)] placeholder:text-[var(--ink-muted)] sm:text-sm"
                     />
                   </div>
                 </div>
@@ -1242,7 +1241,7 @@ export function ItineraryTab({
                     ? "Contoh: Weekend Date di Jakarta Selatan"
                     : "Contoh: Kumpul Akhir Pekan"
                 }
-                className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
+                className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-base text-[var(--ink)] placeholder:text-[var(--ink-muted)] sm:text-sm"
               />
             </div>
 
@@ -1314,7 +1313,7 @@ export function ItineraryTab({
                         })
                       }
                       placeholder={defaultSenderName}
-                      className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3 text-sm text-[var(--ink)]"
+                      className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3 text-base text-[var(--ink)] sm:text-sm"
                     />
                   </div>
 
@@ -1334,7 +1333,7 @@ export function ItineraryTab({
                           alarmMinutes: Number(event.target.value) as AlarmMinutes,
                         }))
                       }
-                      className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3 text-sm text-[var(--ink)]"
+                      className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3 text-base text-[var(--ink)] sm:text-sm"
                     >
                       <option value={15}>15 menit sebelum</option>
                       <option value={30}>30 menit sebelum</option>
@@ -1360,7 +1359,7 @@ export function ItineraryTab({
                           icsMode: event.target.value as IcsBundleMode,
                         }))
                       }
-                      className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3 text-sm text-[var(--ink)]"
+                      className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3 text-base text-[var(--ink)] sm:text-sm"
                     >
                       <option value="combined">Semua sesi dalam 1 file .ics</option>
                       <option value="separate">Terpisah 1 file .ics per sesi</option>
@@ -1421,7 +1420,7 @@ export function ItineraryTab({
                         patchActiveDraftAutoIntro(mode, { categoryLabel: event.target.value })
                       }
                       placeholder="Contoh: Syukuran Rumah, Rapat Tim, Roadtrip..."
-                      className="mt-2 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-sm text-[var(--ink)]"
+                      className="mt-2 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-base text-[var(--ink)] sm:text-sm"
                     />
                   ) : null}
                 </div>
@@ -1481,7 +1480,7 @@ export function ItineraryTab({
                       }))
                     }
                     placeholder="Tulis pesan pembuka undangan di sini..."
-                    className="mt-2 w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 py-2 text-sm leading-relaxed text-[var(--ink)]"
+                    className="mt-2 w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 py-2 text-base leading-relaxed text-[var(--ink)] sm:text-sm"
                   />
                   <p className="mt-0.5 text-right font-mono-num text-[11px] text-[var(--ink-muted)]">
                     {activeDraft.introMessage.length} / 600
@@ -1492,8 +1491,16 @@ export function ItineraryTab({
           </section>
 
           {/* Bar Aksi Mobile (< lg) */}
-          <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] p-4 shadow-xs lg:hidden">
+          <div className="space-y-2.5 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] p-4 shadow-xs lg:hidden">
             {actionControls}
+            <button
+              type="button"
+              onClick={() => setMobilePreviewOpen(true)}
+              className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-xs font-semibold text-[var(--ink)] hover:bg-[var(--surface-muted)]"
+            >
+              <Ticket className="h-4 w-4 text-[var(--accent)]" strokeWidth={2} aria-hidden="true" />
+              <span>Lihat Pratinjau Tiket ({activeDraft.sessions.length} sesi)</span>
+            </button>
           </div>
         </form>
 
@@ -1523,7 +1530,7 @@ export function ItineraryTab({
       {/* Modal Pemilih Kontak Tersimpan (mode Acara & Kegiatan) */}
       {contactPickerOpen ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/65 p-0 sm:items-center sm:p-4"
           role="presentation"
           onClick={(event) => {
             if (event.target === event.currentTarget) {
@@ -1535,7 +1542,8 @@ export function ItineraryTab({
             role="dialog"
             aria-modal="true"
             aria-label="Pilih penerima dari daftar kontak"
-            className="flex max-h-[80dvh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] shadow-xl"
+            className="flex max-h-[90dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-3xl border border-[var(--border-subtle)] bg-[var(--surface)] shadow-xl sm:rounded-2xl"
+            style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
           >
             <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-5 py-3.5">
               <div>
@@ -1687,7 +1695,8 @@ export function ItineraryTab({
             role="dialog"
             aria-modal="true"
             aria-label="Pratinjau tiket undangan"
-            className="max-h-[85dvh] w-full overflow-y-auto rounded-t-2xl border-t border-[var(--border-subtle)] bg-[var(--bg)] p-4"
+            className="max-h-[90dvh] w-full overflow-y-auto rounded-t-3xl border-t border-[var(--border-subtle)] bg-[var(--bg)] p-4"
+            style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0px))" }}
           >
             <div className="mb-3 flex items-center justify-between">
               <span className="font-display text-base font-bold text-[var(--ink)]">

@@ -157,7 +157,7 @@ export function CustomMessageCard({
               setIsDirty(true);
               if (feedback) setFeedback(null);
             }}
-            className="min-h-[34px] rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] transition-colors hover:border-[var(--border-control)] hover:bg-[var(--surface-muted)]"
+            className="min-h-[40px] rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3 py-1.5 text-xs font-medium text-[var(--ink)] transition-colors hover:border-[var(--border-control)] hover:bg-[var(--surface-muted)] sm:min-h-[34px] sm:px-2.5 sm:py-1"
           >
             {preset}
           </button>
@@ -179,7 +179,7 @@ export function CustomMessageCard({
               setIsDirty(true);
             }}
             placeholder="Tulis pesan penyemangat atau pilih preset di atas..."
-            className="w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 py-2.5 text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
+            className="w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 py-2.5 text-base text-[var(--ink)] placeholder:text-[var(--ink-muted)] sm:text-sm"
           />
           <div className="mt-1 flex items-center justify-between text-[11px] text-[var(--ink-muted)]">
             <span>{isDirty ? "Belum disimpan" : "Tersimpan"}</span>

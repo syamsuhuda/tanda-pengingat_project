@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertCircle, CalendarOff, Check, Plus, X } from "lucide-react";
 import { formatWibDateCompactIndonesian } from "@/lib/timezone";
 import type { OffDayEntry } from "@/lib/types";
@@ -26,6 +26,12 @@ export function OffDaysCard({
     type: "success" | "error";
     text: string;
   } | null>(null);
+
+  useEffect(() => {
+    if (!formOpen) {
+      setDateInput(tomorrowWib);
+    }
+  }, [tomorrowWib, formOpen]);
 
   async function addCustomDate(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -165,7 +171,7 @@ export function OffDaysCard({
                 required
                 value={dateInput}
                 onChange={(event) => setDateInput(event.target.value)}
-                className="font-mono-num mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)]"
+                className="font-mono-num mt-1 min-h-[44px] w-full min-w-0 max-w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-3 text-base text-[var(--ink)] sm:text-sm"
               />
             </div>
 
@@ -183,7 +189,7 @@ export function OffDaysCard({
                 value={noteInput}
                 onChange={(event) => setNoteInput(event.target.value)}
                 placeholder="Libur shift, Lepas jaga"
-                className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
+                className="mt-1 min-h-[44px] w-full min-w-0 rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-3 text-base text-[var(--ink)] placeholder:text-[var(--ink-muted)] sm:text-sm"
               />
             </div>
           </div>
@@ -238,7 +244,7 @@ export function OffDaysCard({
                   disabled={busyKey !== null}
                   onClick={() => void removeDate(item.date)}
                   aria-label={`Hapus libur ${formatWibDateCompactIndonesian(item.date)}`}
-                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-black/15 dark:hover:bg-white/15 disabled:opacity-40"
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-black/15 dark:hover:bg-white/15 disabled:opacity-40 sm:h-7 sm:w-7"
                 >
                   <X className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden="true" />
                 </button>

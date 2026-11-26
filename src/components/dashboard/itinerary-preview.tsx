@@ -86,7 +86,7 @@ export function ItineraryPreview({
     <aside
       aria-labelledby="itinerary-preview-heading"
       className={`flex flex-col overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] shadow-xs ${
-        sticky ? "lg:sticky lg:top-20 lg:max-h-[calc(100vh-112px)]" : ""
+        sticky ? "lg:sticky lg:top-20 lg:max-h-[calc(100dvh-112px)]" : ""
       }`}
     >
       <div className="shrink-0 border-b border-dashed border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-5 py-4">
@@ -171,7 +171,7 @@ export function ItineraryPreview({
                 aria-hidden="true"
                 className={`font-mono-num absolute top-0.5 left-0 inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs font-bold transition-colors ${
                   isSelected
-                    ? "border-[var(--accent)] bg-[var(--accent)] text-white"
+                    ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-fg)]"
                     : "border-[var(--border-subtle)] bg-[var(--surface-elevated)] text-[var(--ink)]"
                 }`}
               >

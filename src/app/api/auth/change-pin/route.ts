@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import {
   getClientIp,
   handleRouteError,
@@ -6,30 +5,27 @@ import {
   jsonOk,
   parseJsonBody,
   requireAuthenticatedSession,
+  withNoStore,
 } from "@/lib/api-helpers";
+import { sendPinResetSuccessEmail } from "@/lib/mailer";
 import {
-  AUTH_NO_STORE_HEADERS,
   createSessionCookieValue,
   getSessionCookieOptions,
   hashClientIp,
 } from "@/lib/security";
 import {
   clearLoginRateLimit,
+  consumeVerificationTicket,
+  getActiveSenderName,
   getLoginRateLimitState,
   recordFailedLoginAttempt,
   setActivePinConfig,
   verifyActivePin,
 } from "@/lib/store";
+import { getNowWibTimeLabel } from "@/lib/timezone";
 import { changePinSchema } from "@/lib/validators";
 
 export const dynamic = "force-dynamic";
-
-function withNoStore<T>(response: NextResponse<T>): NextResponse<T> {
-  for (const [k, v] of Object.entries(AUTH_NO_STORE_HEADERS)) {
-    response.headers.set(k, v);
-  }
-  return response;
-}
 
 export async function POST(request: Request) {
   try {
@@ -41,6 +37,20 @@ export async function POST(request: Request) {
     const parsed = await parseJsonBody(request, changePinSchema);
     if (!parsed.success) {
       return withNoStore(parsed.response);
+    }
+
+    const ticketValid = await consumeVerificationTicket(
+      "change_pin",
+      parsed.data.verificationToken,
+    );
+    if (!ticketValid) {
+      return withNoStore(
+        jsonError(
+          "Sesi verifikasi OTP sudah habis atau tidak valid. Silakan minta dan verifikasi kode OTP baru.",
+          "VERIFICATION_EXPIRED",
+          401,
+        ),
+      );
     }
 
     const ipHash = hashClientIp(getClientIp(request));
@@ -83,6 +93,18 @@ export async function POST(request: Request) {
 
     const { sessionVersion, updatedAt } = await setActivePinConfig(parsed.data.newPin, "pin_updated");
     const cookieValue = createSessionCookieValue(sessionVersion);
+
+    try {
+      const senderName = await getActiveSenderName();
+      await sendPinResetSuccessEmail({
+        purpose: "change_pin",
+        resetAtWibLabel: `${getNowWibTimeLabel()} WIB`,
+        senderName,
+      });
+    } catch {
+      // Notifikasi email tidak menggagalkan pembaruan PIN yang sudah tersimpan aman.
+    }
+
     const response = withNoStore(
       jsonOk(
         "PIN akses 6 digit berhasil diperbarui. Sesi di perangkat lain otomatis dikeluarkan.",

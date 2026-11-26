@@ -191,8 +191,11 @@ export function DashboardShell() {
 
   return (
     <div className="min-h-dvh bg-[var(--bg)] text-[var(--ink)]">
-      <header className="sticky top-0 z-30 border-b border-[var(--border-subtle)] bg-[var(--surface)]">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5 sm:px-6">
+      <header
+        className="sticky top-0 z-30 border-b border-[var(--border-subtle)] bg-[var(--surface)]"
+        style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+      >
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-2.5 sm:gap-3 sm:px-6">
           <div className="flex min-w-0 items-center gap-2.5">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--border-subtle)] bg-[var(--accent-tint)] text-[var(--accent)]">
               <CalendarClock className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
@@ -303,7 +306,8 @@ export function DashboardShell() {
       {toasts.length > 0 ? (
         <div
           aria-live="polite"
-          className="pointer-events-none fixed inset-x-0 top-16 z-40 mx-auto flex max-w-md flex-col gap-2 px-4 sm:inset-x-auto sm:right-6 sm:left-auto sm:px-0"
+          className="pointer-events-none fixed inset-x-0 z-40 mx-auto flex w-[calc(100vw-2rem)] max-w-md flex-col gap-2 sm:inset-x-auto sm:right-6 sm:left-auto sm:w-auto"
+          style={{ top: "calc(4rem + env(safe-area-inset-top, 0px))" }}
         >
           {toasts.map((toast) => (
             <div
@@ -416,18 +420,16 @@ export function DashboardShell() {
               aria-labelledby="tab-itinerary"
               hidden={activeTab !== "itinerary"}
             >
-              {activeTab === "itinerary" ? (
-                <ItineraryTab
-                  todayWib={statusData.todayWib}
-                  partnerName={statusData.recipient.name}
-                  partnerEmail={statusData.recipient.email}
-                  defaultSenderName={statusData.senderName}
-                  contacts={contacts}
-                  contactGroups={contactGroups}
-                  onContactsChanged={loadContacts}
-                  onSentSuccess={() => triggerRefresh(true, true)}
-                />
-              ) : null}
+              <ItineraryTab
+                todayWib={statusData.todayWib}
+                partnerName={statusData.recipient.name}
+                partnerEmail={statusData.recipient.email}
+                defaultSenderName={statusData.senderName}
+                contacts={contacts}
+                contactGroups={contactGroups}
+                onContactsChanged={loadContacts}
+                onSentSuccess={() => triggerRefresh(true, true)}
+              />
             </div>
           </>
         ) : null}

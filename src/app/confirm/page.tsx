@@ -51,13 +51,14 @@ export default async function ConfirmPage({ searchParams }: ConfirmPageProps) {
       initialState = "invalid_window";
     } else {
       try {
-        const recipient = await getActiveRecipient();
-        partnerName = recipient.name;
-
         if (!verifyAttendanceToken(dateParam, tokenParam)) {
           initialState = "invalid_token";
         } else {
-          const existing = await getAttendanceStatus(dateParam);
+          const [recipient, existing] = await Promise.all([
+            getActiveRecipient(),
+            getAttendanceStatus(dateParam),
+          ]);
+          partnerName = recipient.name;
           if (existing) {
             initialState = "already_confirmed";
             initialConfirmedTimeLabel = formatIsoToWibTime(existing.confirmedAt);

@@ -39,8 +39,21 @@ export const loginSchema = z.object({
   pin: z.string().trim().min(4, "PIN minimal 4 karakter").max(64, "PIN terlalu panjang"),
 });
 
+export const verifyOtpSchema = z.object({
+  otp: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/, "Kode OTP harus tepat 6 digit angka"),
+});
+
+export const verificationTokenSchema = z
+  .string()
+  .trim()
+  .regex(/^[a-fA-F0-9]{64}$/, "Tiket verifikasi tidak valid atau sudah kedaluwarsa");
+
 export const changePinSchema = z
   .object({
+    verificationToken: verificationTokenSchema,
     currentPin: z
       .string()
       .trim()
@@ -62,10 +75,7 @@ export const forgotPinRequestSchema = z.object({});
 
 export const forgotPinResetSchema = z
   .object({
-    otp: z
-      .string()
-      .trim()
-      .regex(/^\d{6}$/, "Kode verifikasi harus tepat 6 digit angka"),
+    verificationToken: verificationTokenSchema,
     newPin: strictSixDigitPinSchema,
     confirmNewPin: strictSixDigitPinSchema,
   })

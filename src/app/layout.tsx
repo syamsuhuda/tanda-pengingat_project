@@ -10,6 +10,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
 };
 
 // Terapkan class `dark` secara default sebelum body dirender agar tidak pernah ada kedipan putih (FOUC).

@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { cookies } from "next/headers";
 import { getEnv } from "./env";
 import { getRedis } from "./redis";
+import type { OtpPurpose } from "./types";
 
 export const SESSION_COOKIE_NAME = "pj_session";
 export const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 hari
@@ -35,6 +36,14 @@ export function sanitizeSenderDisplayName(
     .slice(0, 60);
 
   return safeFallback || "Pengingat Jadwal";
+}
+
+export function sanitizeEmailHeaderValue(raw: string, maxLength = 180): string {
+  return raw
+    .replace(/[\r\n\0\x00-\x1F\x7F]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
 }
 
 // Hash kedua input sebelum timingSafeEqual agar panjang string yang berbeda tidak menimbulkan RangeError maupun bocoran panjang.
@@ -95,6 +104,31 @@ export function verifyOtpHmac(otp: string, salt: string, expectedHmac: string): 
   }
   const candidate = hashOtpHmac(otp, salt);
   return timingSafeStringEqual(candidate, expectedHmac.toLowerCase());
+}
+
+export function generateVerificationToken(): string {
+  return crypto.randomBytes(32).toString("hex");
+}
+
+export function hashPurposeToken(purpose: OtpPurpose, token: string, salt: string): string {
+  const env = getEnv();
+  return crypto
+    .createHmac("sha256", env.HMAC_SECRET)
+    .update(`pin-ticket:${purpose}:${salt}:${token}`, "utf8")
+    .digest("hex");
+}
+
+export function verifyPurposeToken(
+  purpose: OtpPurpose,
+  token: string,
+  salt: string,
+  expectedHash: string,
+): boolean {
+  if (!/^[a-fA-F0-9]{64}$/.test(token) || !salt || !/^[a-fA-F0-9]{64}$/.test(expectedHash)) {
+    return false;
+  }
+  const candidate = hashPurposeToken(purpose, token.toLowerCase(), salt);
+  return timingSafeStringEqual(candidate, expectedHash.toLowerCase());
 }
 
 export function verifyCronBearerToken(authHeader: string | null): boolean {

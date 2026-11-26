@@ -5,16 +5,12 @@ import {
   AlertCircle,
   Check,
   Clock,
-  Eye,
-  EyeOff,
   Mail,
   ShieldCheck,
   UserRound,
 } from "lucide-react";
-import {
-  PinSixDotIndicator,
-  sanitizeNumericPin6,
-} from "@/components/ui/pin-input-dots";
+import { StepUpPinFlow } from "@/components/ui/step-up-pin-flow";
+import { TimePicker24h } from "@/components/ui/time-picker-24h";
 import { hmTimeToMinutes } from "@/lib/timezone";
 import type {
   ActiveRecipientConfig,
@@ -31,12 +27,6 @@ interface BotSettingsCardProps {
 }
 
 type SettingsSubTab = "recipient" | "schedule" | "security";
-
-const HALF_HOUR_OPTIONS: string[] = Array.from({ length: 48 }, (_, index) => {
-  const hour = String(Math.floor(index / 2)).padStart(2, "0");
-  const minute = index % 2 === 0 ? "00" : "30";
-  return `${hour}:${minute}`;
-});
 
 const STAGE_ROWS: Array<{ stage: AttendanceStage; title: string }> = [
   { stage: "morning", title: "Pagi + Kalender" },
@@ -108,16 +98,6 @@ export function BotSettingsCard({
     text: string;
   } | null>(null);
 
-  const [currentPin, setCurrentPin] = useState("");
-  const [newPin, setNewPin] = useState("");
-  const [confirmNewPin, setConfirmNewPin] = useState("");
-  const [showSecurityPins, setShowSecurityPins] = useState(false);
-  const [savingPin, setSavingPin] = useState(false);
-  const [pinFeedback, setPinFeedback] = useState<{
-    type: "success" | "error";
-    text: string;
-  } | null>(null);
-
   useEffect(() => {
     if (!recipientDirty) {
       setName(recipient.name);
@@ -134,9 +114,9 @@ export function BotSettingsCard({
   useEffect(() => {
     if (!scheduleDirty) {
       setScheduleDraft({
-        morning: { ...schedule.morning },
-        afternoon: { ...schedule.afternoon },
-        urgent: { ...schedule.urgent },
+        morning: { enabled: schedule.morning.enabled, time: schedule.morning.time },
+        afternoon: { enabled: schedule.afternoon.enabled, time: schedule.afternoon.time },
+        urgent: { enabled: schedule.urgent.enabled, time: schedule.urgent.time },
       });
     }
   }, [
@@ -273,71 +253,6 @@ export function BotSettingsCard({
     }
   }
 
-  async function handleChangePin(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setPinFeedback(null);
-
-    if (currentPin.trim().length < 4) {
-      setPinFeedback({ type: "error", text: "Masukkan PIN saat ini minimal 4 karakter." });
-      return;
-    }
-    if (!/^\d{6}$/.test(newPin)) {
-      setPinFeedback({ type: "error", text: "PIN baru harus tepat 6 digit angka." });
-      return;
-    }
-    if (newPin !== confirmNewPin) {
-      setPinFeedback({ type: "error", text: "Konfirmasi PIN baru tidak cocok." });
-      return;
-    }
-    if (newPin === currentPin.trim()) {
-      setPinFeedback({
-        type: "error",
-        text: "PIN baru tidak boleh sama dengan PIN saat ini.",
-      });
-      return;
-    }
-
-    setSavingPin(true);
-    try {
-      const response = await fetch("/api/auth/change-pin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          currentPin: currentPin.trim(),
-          newPin,
-          confirmNewPin,
-        }),
-      });
-      const body = (await response.json()) as { ok: boolean; message?: string };
-
-      if (!response.ok || !body.ok) {
-        setPinFeedback({
-          type: "error",
-          text: body.message ?? "Gagal memperbarui PIN akses.",
-        });
-        return;
-      }
-
-      setCurrentPin("");
-      setNewPin("");
-      setConfirmNewPin("");
-      setPinFeedback({
-        type: "success",
-        text:
-          body.message ??
-          "PIN akses 6 digit berhasil diperbarui. Sesi perangkat lain otomatis dikeluarkan.",
-      });
-      await onConfigChanged();
-    } catch {
-      setPinFeedback({
-        type: "error",
-        text: "Koneksi gagal saat memperbarui PIN.",
-      });
-    } finally {
-      setSavingPin(false);
-    }
-  }
-
   return (
     <section
       aria-labelledby="bot-settings-heading"
@@ -354,21 +269,21 @@ export function BotSettingsCard({
         <div
           role="tablist"
           aria-label="Sub-tab pengaturan bot"
-          className="grid grid-cols-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-1"
+          className="grid w-full grid-cols-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-1 sm:w-auto"
         >
           <button
             type="button"
             role="tab"
             aria-selected={subTab === "recipient"}
             onClick={() => setSubTab("recipient")}
-            className={`inline-flex min-h-[36px] items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition-colors ${
+            className={`inline-flex min-h-[44px] items-center justify-center gap-1 rounded-lg px-1.5 text-[11px] font-semibold transition-colors sm:min-h-[36px] sm:gap-1.5 sm:px-2.5 sm:text-xs ${
               subTab === "recipient"
                 ? "bg-[var(--surface)] text-[var(--ink)] shadow-xs"
                 : "text-[var(--ink-muted)] hover:text-[var(--ink)]"
             }`}
           >
-            <UserRound className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-            <span>Penerima</span>
+            <UserRound className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />
+            <span className="truncate">Penerima</span>
           </button>
 
           <button
@@ -376,14 +291,14 @@ export function BotSettingsCard({
             role="tab"
             aria-selected={subTab === "schedule"}
             onClick={() => setSubTab("schedule")}
-            className={`inline-flex min-h-[36px] items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition-colors ${
+            className={`inline-flex min-h-[44px] items-center justify-center gap-1 rounded-lg px-1.5 text-[11px] font-semibold transition-colors sm:min-h-[36px] sm:gap-1.5 sm:px-2.5 sm:text-xs ${
               subTab === "schedule"
                 ? "bg-[var(--surface)] text-[var(--ink)] shadow-xs"
                 : "text-[var(--ink-muted)] hover:text-[var(--ink)]"
             }`}
           >
-            <Clock className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-            <span>Jam Kirim</span>
+            <Clock className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />
+            <span className="truncate">Jam Kirim</span>
           </button>
 
           <button
@@ -391,14 +306,14 @@ export function BotSettingsCard({
             role="tab"
             aria-selected={subTab === "security"}
             onClick={() => setSubTab("security")}
-            className={`inline-flex min-h-[36px] items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition-colors ${
+            className={`inline-flex min-h-[44px] items-center justify-center gap-1 rounded-lg px-1.5 text-[11px] font-semibold transition-colors sm:min-h-[36px] sm:gap-1.5 sm:px-2.5 sm:text-xs ${
               subTab === "security"
                 ? "bg-[var(--surface)] text-[var(--ink)] shadow-xs"
                 : "text-[var(--ink-muted)] hover:text-[var(--ink)]"
             }`}
           >
-            <ShieldCheck className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-            <span>Keamanan</span>
+            <ShieldCheck className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />
+            <span className="truncate">Keamanan</span>
           </button>
         </div>
       </div>
@@ -426,7 +341,7 @@ export function BotSettingsCard({
                     if (recipientFeedback) setRecipientFeedback(null);
                   }}
                   placeholder="Nama panggilan"
-                  className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-sm text-[var(--ink)]"
+                  className="mt-1 min-h-[44px] w-full min-w-0 rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-base text-[var(--ink)] sm:text-sm"
                 />
               </div>
 
@@ -449,7 +364,7 @@ export function BotSettingsCard({
                     if (recipientFeedback) setRecipientFeedback(null);
                   }}
                   placeholder="nama@email.com"
-                  className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-sm text-[var(--ink)]"
+                  className="mt-1 min-h-[44px] w-full min-w-0 rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-base text-[var(--ink)] sm:text-sm"
                 />
               </div>
             </div>
@@ -513,7 +428,7 @@ export function BotSettingsCard({
                     if (senderFeedback) setSenderFeedback(null);
                   }}
                   placeholder="Nama pengirim email"
-                  className="min-h-[44px] flex-1 rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-sm text-[var(--ink)]"
+                  className="min-h-[44px] min-w-0 flex-1 rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-base text-[var(--ink)] sm:text-sm"
                 />
                 <button
                   type="submit"
@@ -548,14 +463,11 @@ export function BotSettingsCard({
         <form onSubmit={handleSaveSchedule} className="mt-4 space-y-2.5" noValidate>
           {STAGE_ROWS.map((row) => {
             const cfg = scheduleDraft[row.stage];
-            const options = HALF_HOUR_OPTIONS.includes(cfg.time)
-              ? HALF_HOUR_OPTIONS
-              : [cfg.time, ...HALF_HOUR_OPTIONS].sort();
 
             return (
               <div
                 key={row.stage}
-                className={`flex items-center justify-between gap-2 rounded-xl border px-3.5 py-2 transition-colors ${
+                className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3.5 py-2.5 transition-colors ${
                   cfg.enabled
                     ? "border-[var(--border-subtle)] bg-[var(--surface-elevated)]"
                     : "border-[var(--border-subtle)] bg-[var(--surface-muted)] opacity-75"
@@ -569,26 +481,22 @@ export function BotSettingsCard({
                   <label htmlFor={`settings-time-${row.stage}`} className="sr-only">
                     Jam WIB untuk {row.title}
                   </label>
-                  <select
+                  <TimePicker24h
                     id={`settings-time-${row.stage}`}
                     value={cfg.time}
+                    stepMinutes={30}
                     disabled={!cfg.enabled || savingSchedule}
-                    onChange={(event) => {
+                    onChange={(nextHm) => {
                       setScheduleDraft((prev) => ({
                         ...prev,
-                        [row.stage]: { ...prev[row.stage], time: event.target.value },
+                        [row.stage]: { ...prev[row.stage], time: nextHm },
                       }));
                       setScheduleDirty(true);
                       if (scheduleFeedback) setScheduleFeedback(null);
                     }}
-                    className="font-mono-num min-h-[40px] rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-2.5 text-xs font-semibold text-[var(--ink)] disabled:opacity-50"
-                  >
-                    {options.map((slot) => (
-                      <option key={slot} value={slot}>
-                        {slot} WIB
-                      </option>
-                    ))}
-                  </select>
+                    ariaLabel={`Jam ${row.title}`}
+                    className="w-[152px] sm:w-[144px]"
+                  />
 
                   <button
                     type="button"
@@ -662,128 +570,23 @@ export function BotSettingsCard({
           </button>
         </form>
       ) : (
-        <form onSubmit={handleChangePin} className="mt-4 space-y-3.5" noValidate>
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <h3 className="text-xs font-bold text-[var(--ink)]">Ganti PIN (6 Digit)</h3>
-              <p className="mt-0.5 text-[11px] leading-relaxed text-[var(--ink-muted)]">
-                Mengganti PIN akan langsung mengamankan akun dengan mengeluarkan sesi aktif di perangkat lain.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowSecurityPins((prev) => !prev)}
-              aria-label={showSecurityPins ? "Sembunyikan PIN" : "Tampilkan PIN"}
-              className="inline-flex min-h-[38px] shrink-0 items-center gap-1 rounded-lg border border-[var(--border-control)] bg-[var(--surface-elevated)] px-2.5 text-xs font-semibold text-[var(--ink-muted)] hover:text-[var(--ink)]"
-            >
-              {showSecurityPins ? (
-                <EyeOff className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden="true" />
-              ) : (
-                <Eye className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden="true" />
-              )}
-              <span>{showSecurityPins ? "Sembunyikan" : "Lihat"}</span>
-            </button>
-          </div>
-
+        <div className="mt-4 space-y-3.5">
           <div>
-            <label
-              htmlFor="security-current-pin"
-              className="block text-xs font-semibold text-[var(--ink)]"
-            >
-              PIN Saat Ini
-            </label>
-            <input
-              id="security-current-pin"
-              type={showSecurityPins ? "text" : "password"}
-              inputMode="numeric"
-              autoComplete="current-password"
-              maxLength={64}
-              value={currentPin}
-              onChange={(event) => {
-                setCurrentPin(event.target.value.replace(/\D/g, "").slice(0, 64));
-                if (pinFeedback) setPinFeedback(null);
-              }}
-              placeholder="Masukkan PIN saat ini..."
-              className="font-mono-num mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-sm tracking-widest text-[var(--ink)] placeholder:font-sans placeholder:tracking-normal placeholder:text-[var(--ink-muted)]"
-            />
+            <h3 className="text-xs font-bold text-[var(--ink)]">
+              Ubah PIN Akses (Verifikasi Bertahap)
+            </h3>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-[var(--ink-muted)]">
+              Verifikasi kode OTP email pemilik terlebih dahulu sebelum mengganti PIN. Mengganti PIN akan mengeluarkan sesi perangkat lain.
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label
-                htmlFor="security-new-pin"
-                className="block text-xs font-semibold text-[var(--ink)]"
-              >
-                PIN Baru (6 Digit)
-              </label>
-              <input
-                id="security-new-pin"
-                type={showSecurityPins ? "text" : "password"}
-                inputMode="numeric"
-                autoComplete="new-password"
-                maxLength={6}
-                value={newPin}
-                onChange={(event) => {
-                  setNewPin(sanitizeNumericPin6(event.target.value));
-                  if (pinFeedback) setPinFeedback(null);
-                }}
-                placeholder="6 digit angka"
-                className="font-mono-num mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-sm tracking-widest text-[var(--ink)] placeholder:font-sans placeholder:tracking-normal placeholder:text-[var(--ink-muted)]"
-              />
-              <PinSixDotIndicator length={newPin.length} />
-            </div>
-
-            <div>
-              <label
-                htmlFor="security-confirm-pin"
-                className="block text-xs font-semibold text-[var(--ink)]"
-              >
-                Konfirmasi PIN Baru
-              </label>
-              <input
-                id="security-confirm-pin"
-                type={showSecurityPins ? "text" : "password"}
-                inputMode="numeric"
-                autoComplete="new-password"
-                maxLength={6}
-                value={confirmNewPin}
-                onChange={(event) => {
-                  setConfirmNewPin(sanitizeNumericPin6(event.target.value));
-                  if (pinFeedback) setPinFeedback(null);
-                }}
-                placeholder="Ulangi 6 digit PIN baru"
-                className="font-mono-num mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-sm tracking-widest text-[var(--ink)] placeholder:font-sans placeholder:tracking-normal placeholder:text-[var(--ink-muted)]"
-              />
-            </div>
-          </div>
-
-          {pinFeedback ? (
-            <div
-              role={pinFeedback.type === "error" ? "alert" : "status"}
-              className={`flex items-start gap-2 rounded-xl border px-3 py-2 text-xs font-medium ${
-                pinFeedback.type === "error"
-                  ? "border-[var(--danger-border)] bg-[var(--danger-bg)] text-[var(--danger-fg)]"
-                  : "border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-fg)]"
-              }`}
-            >
-              {pinFeedback.type === "error" ? (
-                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.9} aria-hidden="true" />
-              ) : (
-                <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.9} aria-hidden="true" />
-              )}
-              <span>{pinFeedback.text}</span>
-            </div>
-          ) : null}
-
-          <button
-            type="submit"
-            disabled={savingPin}
-            className="inline-flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-xl bg-[var(--ink)] px-4 text-sm font-semibold text-[var(--bg)] transition-opacity hover:opacity-90 active:scale-[0.98] disabled:opacity-50 sm:w-auto"
-          >
-            <ShieldCheck className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-            <span>{savingPin ? "Memperbarui..." : "Perbarui PIN"}</span>
-          </button>
-        </form>
+          <StepUpPinFlow
+            purpose="change_pin"
+            onSuccess={async () => {
+              await onConfigChanged();
+            }}
+          />
+        </div>
       )}
     </section>
   );

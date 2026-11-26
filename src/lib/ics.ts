@@ -60,8 +60,9 @@ export function escapeIcsText(value: string): string {
 
 export function escapeIcsParamValue(value: string): string {
   return value
-    .replace(/[\r\n]+/g, " ")
+    .replace(/[\r\n\0\x00-\x1F\x7F]+/g, " ")
     .replace(/"/g, "'")
+    .replace(/\s+/g, " ")
     .trim();
 }
 

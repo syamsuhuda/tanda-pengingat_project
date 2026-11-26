@@ -92,7 +92,7 @@ export function ActivityLogsCard({ logs }: ActivityLogsCardProps) {
               key={item.key}
               type="button"
               onClick={() => setFilter(item.key)}
-              className={`min-h-[32px] rounded-lg px-2.5 text-xs font-semibold transition-colors ${
+              className={`min-h-[38px] rounded-lg px-2.5 text-xs font-semibold transition-colors sm:min-h-[32px] ${
                 filter === item.key
                   ? "bg-[var(--ink)] text-[var(--bg)]"
                   : "bg-[var(--surface-elevated)] text-[var(--ink-muted)] hover:text-[var(--ink)]"
@@ -111,7 +111,7 @@ export function ActivityLogsCard({ logs }: ActivityLogsCardProps) {
             : "Belum ada aktivitas pada filter ini."}
         </div>
       ) : (
-        <ul className="custom-scrollbar mt-4 max-h-[300px] space-y-2 overflow-y-auto pr-1.5 sm:max-h-[360px]">
+        <ul className="custom-scrollbar mt-4 max-h-[280px] space-y-2 overflow-y-auto overscroll-contain pr-1.5 sm:max-h-[360px]">
           {filteredLogs.map((entry) => {
             const category = getLogCategory(entry.type);
             const badge = RESULT_BADGE[entry.result];

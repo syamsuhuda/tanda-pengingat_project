@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertCircle, Mail, Send, X } from "lucide-react";
 
 interface ManualTriggerModalProps {
@@ -30,6 +30,7 @@ export function ManualTriggerModal({
   const [noteTouched, setNoteTouched] = useState(false);
   const [overrideSenderOpen, setOverrideSenderOpen] = useState(false);
   const [senderOverride, setSenderOverride] = useState(defaultSenderName);
+  const [senderTouched, setSenderTouched] = useState(false);
   const [includeIcs, setIncludeIcs] = useState(true);
   const [forceSend, setForceSend] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -38,26 +39,48 @@ export function ManualTriggerModal({
     text: string;
   } | null>(null);
 
+  const wasOpenRef = useRef(false);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  // Inisialisasi ulang modal hanya saat transisi tertutup -> terbuka agar ketikan, centang, dan feedback tidak pernah ter-reset oleh polling/submit.
   useEffect(() => {
-    if (!open) return;
-    setFeedback(null);
-    setForceSend(false);
-    setOverrideSenderOpen(false);
-    setSenderOverride(defaultSenderName);
-    if (!noteTouched) {
+    if (open && !wasOpenRef.current) {
+      setFeedback(null);
+      setForceSend(false);
+      setOverrideSenderOpen(false);
+      setSenderOverride(defaultSenderName);
+      setSenderTouched(false);
+      setNote(activeCustomMessage ?? "");
+      setNoteTouched(false);
+    }
+    wasOpenRef.current = open;
+  }, [open, activeCustomMessage, defaultSenderName]);
+
+  useEffect(() => {
+    if (open && !noteTouched) {
       setNote(activeCustomMessage ?? "");
     }
+  }, [open, activeCustomMessage, noteTouched]);
 
+  useEffect(() => {
+    if (open && !senderTouched) {
+      setSenderOverride(defaultSenderName);
+    }
+  }, [open, defaultSenderName, senderTouched]);
+
+  useEffect(() => {
+    if (!open) return;
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape" && !submitting) {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
       }
     }
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [open, activeCustomMessage, defaultSenderName, noteTouched, submitting, onClose]);
+  }, [open, submitting]);
 
   if (!open) {
     return null;
@@ -137,7 +160,8 @@ export function ManualTriggerModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="manual-trigger-title"
-        className="w-full max-w-lg rounded-t-2xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-2xl sm:rounded-2xl sm:p-6"
+        className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-2xl sm:rounded-2xl sm:p-6"
+        style={{ paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom, 0px))" }}
       >
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -195,7 +219,7 @@ export function ManualTriggerModal({
                 setNoteTouched(true);
               }}
               placeholder="Contoh: Jangan lupa absen sebelum rapat jam 10 ya."
-              className="mt-1.5 w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 py-2.5 text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
+              className="mt-1.5 w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 py-2.5 text-base text-[var(--ink)] placeholder:text-[var(--ink-muted)] sm:text-sm"
             />
           </div>
 
@@ -234,9 +258,12 @@ export function ManualTriggerModal({
                   type="text"
                   maxLength={60}
                   value={senderOverride}
-                  onChange={(event) => setSenderOverride(event.target.value)}
+                  onChange={(event) => {
+                    setSenderOverride(event.target.value);
+                    setSenderTouched(true);
+                  }}
                   placeholder="Ketik nama pengirim khusus..."
-                  className="min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-sm text-[var(--ink)]"
+                  className="min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-base text-[var(--ink)] sm:text-sm"
                 />
               </div>
             ) : null}

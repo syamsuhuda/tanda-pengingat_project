@@ -151,16 +151,16 @@ export function AttendanceTab({
     try {
       const response = isCurrentlyOff
         ? await fetch(`/api/attendance/off-days?date=${encodeURIComponent(targetDate)}`, {
-            method: "DELETE",
-          })
+          method: "DELETE",
+        })
         : await fetch("/api/attendance/off-days", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              dates: [targetDate],
-              note: target === "today" ? "Libur hari ini" : "Libur besok",
-            }),
-          });
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            dates: [targetDate],
+            note: target === "today" ? "Libur hari ini" : "Libur besok",
+          }),
+        });
 
       const body = (await response.json()) as { ok: boolean; message?: string };
       if (!response.ok || !body.ok) {
@@ -411,11 +411,10 @@ export function AttendanceTab({
         {statusFeedback ? (
           <div
             role={statusFeedback.type === "error" ? "alert" : "status"}
-            className={`mt-4 flex items-start gap-2 rounded-xl border px-3.5 py-2.5 text-sm ${
-              statusFeedback.type === "error"
+            className={`mt-4 flex items-start gap-2 rounded-xl border px-3.5 py-2.5 text-sm ${statusFeedback.type === "error"
                 ? "border-[var(--danger-border)] bg-[var(--danger-bg)] text-[var(--danger-fg)]"
                 : "border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-fg)]"
-            }`}
+              }`}
           >
             {statusFeedback.type === "error" ? (
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.9} aria-hidden="true" />
@@ -430,7 +429,7 @@ export function AttendanceTab({
           <button
             type="button"
             onClick={() => setManualModalOpen(true)}
-            className="btn-primary-accent inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold transition-colors active:scale-[0.98]"
+            className="btn-primary-accent inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold transition-colors active:scale-[0.98] sm:w-auto"
           >
             <Send className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
             <span>Kirim Pengingat Sekarang</span>
@@ -441,7 +440,7 @@ export function AttendanceTab({
               type="button"
               onClick={() => void handleManualConfirmToday()}
               disabled={confirmingManual}
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-[var(--success-border)] bg-[var(--success-bg)] px-3.5 text-xs font-bold text-[var(--success-fg)] transition-opacity hover:opacity-90 active:scale-[0.98] disabled:opacity-60"
+              className="inline-flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-xl border border-[var(--success-border)] bg-[var(--success-bg)] px-3.5 text-xs font-bold text-[var(--success-fg)] transition-opacity hover:opacity-90 active:scale-[0.98] disabled:opacity-60 sm:w-auto"
             >
               <CheckCircle2 className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
               <span>{confirmingManual ? "Menyimpan..." : "Tandai Sudah Absen"}</span>
@@ -450,54 +449,54 @@ export function AttendanceTab({
             <button
               type="button"
               onClick={() => setResetDialogOpen(true)}
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-xs font-semibold text-[var(--ink)] transition-colors hover:bg-[var(--surface-muted)] active:scale-[0.98]"
+              className="inline-flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-xs font-semibold text-[var(--ink)] transition-colors hover:bg-[var(--surface-muted)] active:scale-[0.98] sm:w-auto"
             >
               <RotateCcw className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
               <span>Reset Status</span>
             </button>
           )}
 
-          <button
-            type="button"
-            disabled={quickOffBusy !== null}
-            onClick={() => void toggleQuickOffDay("today")}
-            className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border px-3.5 text-xs font-semibold transition-colors active:scale-[0.98] disabled:opacity-50 ${
-              isTodayOff
-                ? "border-[var(--off-border)] bg-[var(--off-bg)] text-[var(--off-fg)]"
-                : "border-[var(--border-control)] bg-[var(--surface-elevated)] text-[var(--ink)] hover:bg-[var(--surface-muted)]"
-            }`}
-          >
-            <CalendarOff className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-            <span>
-              {quickOffBusy === "today"
-                ? "..."
-                : isTodayOff
-                  ? "Batalkan Libur Hari Ini"
-                  : "Liburkan Hari Ini"}
-            </span>
-          </button>
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
+            <button
+              type="button"
+              disabled={quickOffBusy !== null}
+              onClick={() => void toggleQuickOffDay("today")}
+              className={`inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition-colors active:scale-[0.98] disabled:opacity-50 sm:px-3.5 ${isTodayOff
+                  ? "border-[var(--off-border)] bg-[var(--off-bg)] text-[var(--off-fg)]"
+                  : "border-[var(--border-control)] bg-[var(--surface-elevated)] text-[var(--ink)] hover:bg-[var(--surface-muted)]"
+                }`}
+            >
+              <CalendarOff className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />
+              <span className="truncate">
+                {quickOffBusy === "today"
+                  ? "..."
+                  : isTodayOff
+                    ? "Batal Libur Hari Ini"
+                    : "Liburkan Hari Ini"}
+              </span>
+            </button>
 
-          <button
-            type="button"
-            disabled={quickOffBusy !== null}
-            onClick={() => void toggleQuickOffDay("tomorrow")}
-            className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border px-3.5 text-xs font-semibold transition-colors active:scale-[0.98] disabled:opacity-50 ${
-              isTomorrowOff
-                ? "border-[var(--off-border)] bg-[var(--off-bg)] text-[var(--off-fg)]"
-                : "border-[var(--border-control)] bg-[var(--surface-elevated)] text-[var(--ink)] hover:bg-[var(--surface-muted)]"
-            }`}
-          >
-            <CalendarOff className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-            <span>
-              {quickOffBusy === "tomorrow"
-                ? "..."
-                : isTomorrowOff
-                  ? "Batalkan Libur Besok"
-                  : "Liburkan Besok"}
-            </span>
-          </button>
+            <button
+              type="button"
+              disabled={quickOffBusy !== null}
+              onClick={() => void toggleQuickOffDay("tomorrow")}
+              className={`inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition-colors active:scale-[0.98] disabled:opacity-50 sm:px-3.5 ${isTomorrowOff
+                  ? "border-[var(--off-border)] bg-[var(--off-bg)] text-[var(--off-fg)]"
+                  : "border-[var(--border-control)] bg-[var(--surface-elevated)] text-[var(--ink)] hover:bg-[var(--surface-muted)]"
+                }`}
+            >
+              <CalendarOff className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />
+              <span className="truncate">
+                {quickOffBusy === "tomorrow"
+                  ? "..."
+                  : isTomorrowOff
+                    ? "Batal Libur Besok"
+                    : "Liburkan Besok"}
+              </span>
+            </button>
+          </div>
 
-          <div className="ml-auto flex items-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] py-1.5 pr-2 pl-3">
+          <div className="flex w-full items-center justify-between gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] py-1.5 pr-2 pl-3 sm:ml-auto sm:w-auto">
             <button
               type="button"
               onClick={() => setPauseNoteExpanded((prev) => !prev)}
@@ -516,16 +515,14 @@ export function AttendanceTab({
                 setPauseDraft(next);
                 void savePauseConfig(next, pauseNote);
               }}
-              className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors disabled:opacity-50 ${
-                pauseDraft
+              className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors disabled:opacity-50 ${pauseDraft
                   ? "border-transparent bg-amber-500"
                   : "border-[var(--border-control)] bg-[var(--surface)]"
-              }`}
+                }`}
             >
               <span
-                className={`inline-block h-5 w-5 rounded-full bg-white shadow-xs transition-transform ${
-                  pauseDraft ? "translate-x-6" : "translate-x-1"
-                }`}
+                className={`inline-block h-5 w-5 rounded-full bg-white shadow-xs transition-transform ${pauseDraft ? "translate-x-6" : "translate-x-1"
+                  }`}
               />
             </button>
           </div>
@@ -546,13 +543,13 @@ export function AttendanceTab({
                 setPauseNoteDirty(true);
               }}
               placeholder="Catatan jeda opsional (mis. Cuti sampai Senin)"
-              className="min-h-[40px] flex-1 rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-3 text-xs text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
+              className="min-h-[44px] flex-1 rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-3 text-base text-[var(--ink)] placeholder:text-[var(--ink-muted)] sm:min-h-[40px] sm:text-xs"
             />
             <button
               type="button"
               disabled={savingPause}
               onClick={() => void savePauseConfig(pauseDraft, pauseNote)}
-              className="min-h-[40px] shrink-0 rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-3.5 text-xs font-semibold text-[var(--ink)] hover:bg-[var(--surface-muted)] disabled:opacity-50"
+              className="min-h-[44px] shrink-0 rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-3.5 text-xs font-semibold text-[var(--ink)] hover:bg-[var(--surface-muted)] disabled:opacity-50 sm:min-h-[40px]"
             >
               {savingPause ? "Menyimpan..." : "Simpan Catatan"}
             </button>

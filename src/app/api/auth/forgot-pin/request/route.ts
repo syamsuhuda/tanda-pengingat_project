@@ -1,41 +1,33 @@
 import crypto from "node:crypto";
-import { NextResponse } from "next/server";
 import {
   getClientIp,
   handleRouteError,
   jsonError,
   jsonOk,
+  withNoStore,
 } from "@/lib/api-helpers";
 import { sendPinResetOtpEmail } from "@/lib/mailer";
+import { generateNumericOtp6, hashClientIp, hashOtpHmac } from "@/lib/security";
 import {
-  AUTH_NO_STORE_HEADERS,
-  generateNumericOtp6,
-  hashClientIp,
-  hashOtpHmac,
-} from "@/lib/security";
-import {
+  AUTH_OTP_COOLDOWN_SECONDS,
+  AUTH_OTP_TTL_SECONDS,
+  clearOtpCooldown,
+  deletePurposeOtp,
   getActiveSenderName,
-  getForgotPinCooldownRemaining,
-  getForgotPinRateLimitState,
-  recordForgotPinRequest,
-  saveResetOtp,
-  setForgotPinCooldown,
+  getOtpCooldownRemaining,
+  getOtpRateLimitState,
+  recordOtpRequest,
+  savePurposeOtp,
+  setOtpCooldown,
 } from "@/lib/store";
 import { getNowWibTimeLabel } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
-function withNoStore<T>(response: NextResponse<T>): NextResponse<T> {
-  for (const [k, v] of Object.entries(AUTH_NO_STORE_HEADERS)) {
-    response.headers.set(k, v);
-  }
-  return response;
-}
-
 export async function POST(request: Request) {
   try {
     const ipHash = hashClientIp(getClientIp(request));
-    const rateState = await getForgotPinRateLimitState(ipHash);
+    const rateState = await getOtpRateLimitState("forgot_reset", ipHash);
 
     if (rateState.blocked) {
       return withNoStore(
@@ -47,7 +39,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const cooldownRemaining = await getForgotPinCooldownRemaining();
+    const cooldownRemaining = await getOtpCooldownRemaining("forgot_reset");
     if (cooldownRemaining > 0) {
       return withNoStore(
         jsonError(
@@ -63,21 +55,34 @@ export async function POST(request: Request) {
     const salt = crypto.randomBytes(16).toString("hex");
     const otpHash = hashOtpHmac(otp, salt);
 
-    await saveResetOtp(otpHash, salt);
-    await setForgotPinCooldown();
-    await recordForgotPinRequest(ipHash);
+    await savePurposeOtp("forgot_reset", otpHash, salt);
+    await setOtpCooldown("forgot_reset");
 
-    const senderName = await getActiveSenderName();
-    await sendPinResetOtpEmail({
-      otp,
-      requestedAtWibLabel: `${getNowWibTimeLabel()} WIB`,
-      senderName,
-    });
+    try {
+      const senderName = await getActiveSenderName();
+      await sendPinResetOtpEmail({
+        purpose: "forgot_reset",
+        otp,
+        requestedAtWibLabel: `${getNowWibTimeLabel()} WIB`,
+        senderName,
+      });
+    } catch (mailError) {
+      await Promise.allSettled([
+        deletePurposeOtp("forgot_reset"),
+        clearOtpCooldown("forgot_reset"),
+      ]);
+      throw mailError;
+    }
+
+    await recordOtpRequest("forgot_reset", ipHash);
 
     return withNoStore(
       jsonOk(
         "Kode pemulihan 6 digit telah dikirim ke email pemilik terdaftar. Berlaku selama 10 menit.",
-        { cooldownSeconds: 60 },
+        {
+          cooldownSeconds: AUTH_OTP_COOLDOWN_SECONDS,
+          otpExpiresInSeconds: AUTH_OTP_TTL_SECONDS,
+        },
       ),
     );
   } catch (error) {

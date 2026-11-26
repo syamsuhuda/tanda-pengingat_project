@@ -2,11 +2,14 @@ import crypto from "node:crypto";
 import { getEnv } from "./env";
 import { getRedis } from "./redis";
 import {
+  generateVerificationToken,
   hashPinScrypt,
+  hashPurposeToken,
   sanitizeSenderDisplayName,
   SESSION_VERSION_REDIS_KEY,
   verifyPin,
   verifyPinScrypt,
+  verifyPurposeToken,
 } from "./security";
 import { getNowWibIso, isValidHmTime, isValidYmdDate } from "./timezone";
 import type {
@@ -25,20 +28,23 @@ import type {
   CustomMessageScope,
   FriendContact,
   OffDayEntry,
+  OtpPurpose,
   ResetOtpRecord,
   ScheduleStageConfig,
   TodayOffDayStatus,
+  VerificationTicketRecord,
 } from "./types";
 
 export const ATTENDANCE_STATUS_TTL_SECONDS = 172_800; // 48 jam
 export const ATTENDANCE_SENT_TTL_SECONDS = 86_400; // 24 jam
 export const AUTH_RATELIMIT_TTL_SECONDS = 900; // 15 menit
 export const AUTH_RATELIMIT_MAX_ATTEMPTS = 5;
-export const AUTH_RESET_OTP_TTL_SECONDS = 600; // 10 menit
-export const AUTH_RESET_OTP_MAX_ATTEMPTS = 5;
-export const AUTH_RESET_COOLDOWN_SECONDS = 60;
-export const AUTH_RESET_RATELIMIT_TTL_SECONDS = 900; // 15 menit
-export const AUTH_RESET_RATELIMIT_MAX_REQUESTS = 3;
+export const AUTH_OTP_TTL_SECONDS = 600; // 10 menit
+export const AUTH_OTP_MAX_ATTEMPTS = 5;
+export const AUTH_TICKET_TTL_SECONDS = 300; // 5 menit
+export const AUTH_OTP_COOLDOWN_SECONDS = 60;
+export const AUTH_OTP_RATELIMIT_TTL_SECONDS = 900; // 15 menit
+export const AUTH_OTP_RATELIMIT_MAX_REQUESTS = 3;
 export const ACTIVITY_LOG_MAX_ENTRIES = 30;
 
 const REDIS_KEYS = {
@@ -55,9 +61,11 @@ const REDIS_KEYS = {
   activityLogs: "logs:activity",
   authPinConfig: "auth:config:pin",
   authSessionVersion: SESSION_VERSION_REDIS_KEY,
-  authResetOtp: "auth:reset:otp",
-  authResetCooldown: "auth:reset:cooldown",
-  authResetRateLimit: (ipHash: string) => `auth:reset:ratelimit:${ipHash}`,
+  authPurposeOtp: (purpose: OtpPurpose) => `auth:otp:${purpose}`,
+  authPurposeTicket: (purpose: OtpPurpose) => `auth:ticket:${purpose}`,
+  authPurposeCooldown: (purpose: OtpPurpose) => `auth:otp:cooldown:${purpose}`,
+  authPurposeRateLimit: (purpose: OtpPurpose, ipHash: string) =>
+    `auth:otp:ratelimit:${purpose}:${ipHash}`,
   authRateLimit: (ipHash: string) => `auth:ratelimit:${ipHash}`,
 } as const;
 
@@ -994,44 +1002,58 @@ export async function setActivePinConfig(
   return { sessionVersion: nextSessionVersion, updatedAt };
 }
 
-export async function getForgotPinRateLimitState(ipHash: string): Promise<{
+export async function getOtpRateLimitState(
+  purpose: OtpPurpose,
+  ipHash: string,
+): Promise<{
   blocked: boolean;
   requests: number;
   remainingRequests: number;
 }> {
   const redis = getRedis();
-  const raw = await redis.get<number | string>(REDIS_KEYS.authResetRateLimit(ipHash));
+  const raw = await redis.get<number | string>(REDIS_KEYS.authPurposeRateLimit(purpose, ipHash));
   const requests = Number(raw ?? 0);
   const safeRequests = Number.isFinite(requests) && requests > 0 ? requests : 0;
 
   return {
-    blocked: safeRequests >= AUTH_RESET_RATELIMIT_MAX_REQUESTS,
+    blocked: safeRequests >= AUTH_OTP_RATELIMIT_MAX_REQUESTS,
     requests: safeRequests,
-    remainingRequests: Math.max(0, AUTH_RESET_RATELIMIT_MAX_REQUESTS - safeRequests),
+    remainingRequests: Math.max(0, AUTH_OTP_RATELIMIT_MAX_REQUESTS - safeRequests),
   };
 }
 
-export async function recordForgotPinRequest(ipHash: string): Promise<void> {
+export async function recordOtpRequest(purpose: OtpPurpose, ipHash: string): Promise<void> {
   const redis = getRedis();
-  const key = REDIS_KEYS.authResetRateLimit(ipHash);
+  const key = REDIS_KEYS.authPurposeRateLimit(purpose, ipHash);
   const count = await redis.incr(key);
   if (count === 1) {
-    await redis.expire(key, AUTH_RESET_RATELIMIT_TTL_SECONDS);
+    await redis.expire(key, AUTH_OTP_RATELIMIT_TTL_SECONDS);
   }
 }
 
-export async function getForgotPinCooldownRemaining(): Promise<number> {
+export async function getOtpCooldownRemaining(purpose: OtpPurpose): Promise<number> {
   const redis = getRedis();
-  const ttl = await redis.ttl(REDIS_KEYS.authResetCooldown);
+  const ttl = await redis.ttl(REDIS_KEYS.authPurposeCooldown(purpose));
   return typeof ttl === "number" && ttl > 0 ? ttl : 0;
 }
 
-export async function setForgotPinCooldown(): Promise<void> {
+export async function setOtpCooldown(purpose: OtpPurpose): Promise<void> {
   const redis = getRedis();
-  await redis.set(REDIS_KEYS.authResetCooldown, "1", { ex: AUTH_RESET_COOLDOWN_SECONDS });
+  await redis.set(REDIS_KEYS.authPurposeCooldown(purpose), "1", {
+    ex: AUTH_OTP_COOLDOWN_SECONDS,
+  });
 }
 
-export async function saveResetOtp(otpHash: string, salt: string): Promise<void> {
+export async function clearOtpCooldown(purpose: OtpPurpose): Promise<void> {
+  const redis = getRedis();
+  await redis.del(REDIS_KEYS.authPurposeCooldown(purpose));
+}
+
+export async function savePurposeOtp(
+  purpose: OtpPurpose,
+  otpHash: string,
+  salt: string,
+): Promise<void> {
   const record: ResetOtpRecord = {
     otpHash,
     salt,
@@ -1039,14 +1061,18 @@ export async function saveResetOtp(otpHash: string, salt: string): Promise<void>
     createdAt: getNowWibIso(),
   };
   const redis = getRedis();
-  await redis.set(REDIS_KEYS.authResetOtp, JSON.stringify(record), {
-    ex: AUTH_RESET_OTP_TTL_SECONDS,
+  const pipeline = redis.pipeline();
+  pipeline.set(REDIS_KEYS.authPurposeOtp(purpose), JSON.stringify(record), {
+    ex: AUTH_OTP_TTL_SECONDS,
   });
+  // Hapus tiket verifikasi lama agar permintaan OTP baru selalu memulai dari awal.
+  pipeline.del(REDIS_KEYS.authPurposeTicket(purpose));
+  await pipeline.exec();
 }
 
-export async function getResetOtp(): Promise<ResetOtpRecord | null> {
+export async function getPurposeOtp(purpose: OtpPurpose): Promise<ResetOtpRecord | null> {
   const redis = getRedis();
-  const parsed = parseStoredJson<ResetOtpRecord>(await redis.get(REDIS_KEYS.authResetOtp));
+  const parsed = parseStoredJson<ResetOtpRecord>(await redis.get(REDIS_KEYS.authPurposeOtp(purpose)));
   if (
     parsed &&
     typeof parsed.otpHash === "string" &&
@@ -1058,33 +1084,91 @@ export async function getResetOtp(): Promise<ResetOtpRecord | null> {
   return null;
 }
 
-export async function incrementResetOtpAttempts(current: ResetOtpRecord): Promise<{
+export async function incrementPurposeOtpAttempts(
+  purpose: OtpPurpose,
+  current: ResetOtpRecord,
+): Promise<{
   exhausted: boolean;
   remainingAttempts: number;
 }> {
   const nextAttempts = current.attempts + 1;
   const redis = getRedis();
+  const otpKey = REDIS_KEYS.authPurposeOtp(purpose);
 
-  if (nextAttempts >= AUTH_RESET_OTP_MAX_ATTEMPTS) {
-    await redis.del(REDIS_KEYS.authResetOtp);
+  if (nextAttempts >= AUTH_OTP_MAX_ATTEMPTS) {
+    await redis.del(otpKey);
     return { exhausted: true, remainingAttempts: 0 };
   }
 
-  const remainingTtl = await redis.ttl(REDIS_KEYS.authResetOtp);
+  const remainingTtl = await redis.ttl(otpKey);
   const ex = typeof remainingTtl === "number" && remainingTtl > 10 ? remainingTtl : 60;
-  await redis.set(
-    REDIS_KEYS.authResetOtp,
-    JSON.stringify({ ...current, attempts: nextAttempts }),
-    { ex },
-  );
+  await redis.set(otpKey, JSON.stringify({ ...current, attempts: nextAttempts }), { ex });
 
   return {
     exhausted: false,
-    remainingAttempts: Math.max(0, AUTH_RESET_OTP_MAX_ATTEMPTS - nextAttempts),
+    remainingAttempts: Math.max(0, AUTH_OTP_MAX_ATTEMPTS - nextAttempts),
   };
 }
 
-export async function deleteResetOtp(): Promise<void> {
+export async function deletePurposeOtp(purpose: OtpPurpose): Promise<void> {
   const redis = getRedis();
-  await redis.del(REDIS_KEYS.authResetOtp);
+  await redis.del(REDIS_KEYS.authPurposeOtp(purpose));
+}
+
+export async function issueVerificationTicket(purpose: OtpPurpose): Promise<{
+  verificationToken: string;
+  expiresInSeconds: number;
+  expiresAt: string;
+}> {
+  const verificationToken = generateVerificationToken();
+  const salt = crypto.randomBytes(16).toString("hex");
+  const ticketHash = hashPurposeToken(purpose, verificationToken, salt);
+  const verifiedAt = getNowWibIso();
+  const expiresAt = new Date(Date.now() + AUTH_TICKET_TTL_SECONDS * 1000).toISOString();
+
+  const record: VerificationTicketRecord = {
+    ticketHash,
+    salt,
+    verifiedAt,
+    expiresAt,
+  };
+
+  const redis = getRedis();
+  const pipeline = redis.pipeline();
+  pipeline.del(REDIS_KEYS.authPurposeOtp(purpose));
+  pipeline.set(REDIS_KEYS.authPurposeTicket(purpose), JSON.stringify(record), {
+    ex: AUTH_TICKET_TTL_SECONDS,
+  });
+  await pipeline.exec();
+
+  return {
+    verificationToken,
+    expiresInSeconds: AUTH_TICKET_TTL_SECONDS,
+    expiresAt,
+  };
+}
+
+export async function consumeVerificationTicket(
+  purpose: OtpPurpose,
+  token: string,
+): Promise<boolean> {
+  const redis = getRedis();
+  const ticketKey = REDIS_KEYS.authPurposeTicket(purpose);
+  const parsed = parseStoredJson<VerificationTicketRecord>(await redis.get(ticketKey));
+  if (
+    !parsed ||
+    typeof parsed.ticketHash !== "string" ||
+    typeof parsed.salt !== "string"
+  ) {
+    return false;
+  }
+
+  const valid = verifyPurposeToken(purpose, token, parsed.salt, parsed.ticketHash);
+  if (!valid) {
+    return false;
+  }
+
+  // Tiket bersifat single-use: langsung dihapus begitu lolos verifikasi.
+  await redis.del(ticketKey);
+  return true;
 }

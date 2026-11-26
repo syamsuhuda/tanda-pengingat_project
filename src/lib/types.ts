@@ -90,11 +90,20 @@ export interface ActivePinConfig {
   updatedAt: string;
 }
 
+export type OtpPurpose = "change_pin" | "forgot_reset";
+
 export interface ResetOtpRecord {
   otpHash: string;
   salt: string;
   attempts: number;
   createdAt: string;
+}
+
+export interface VerificationTicketRecord {
+  ticketHash: string;
+  salt: string;
+  verifiedAt: string;
+  expiresAt: string;
 }
 
 export type ActivityLogResult = "success" | "skipped" | "partial" | "error";

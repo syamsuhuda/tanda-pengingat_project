@@ -1,36 +1,23 @@
-import { NextResponse } from "next/server";
 import {
   getClientIp,
   handleRouteError,
   jsonError,
   jsonOk,
   parseJsonBody,
+  withNoStore,
 } from "@/lib/api-helpers";
 import { sendPinResetSuccessEmail } from "@/lib/mailer";
-import {
-  AUTH_NO_STORE_HEADERS,
-  hashClientIp,
-  verifyOtpHmac,
-} from "@/lib/security";
+import { hashClientIp } from "@/lib/security";
 import {
   clearLoginRateLimit,
-  deleteResetOtp,
+  consumeVerificationTicket,
   getActiveSenderName,
-  getResetOtp,
-  incrementResetOtpAttempts,
   setActivePinConfig,
 } from "@/lib/store";
 import { getNowWibTimeLabel } from "@/lib/timezone";
 import { forgotPinResetSchema } from "@/lib/validators";
 
 export const dynamic = "force-dynamic";
-
-function withNoStore<T>(response: NextResponse<T>): NextResponse<T> {
-  for (const [k, v] of Object.entries(AUTH_NO_STORE_HEADERS)) {
-    response.headers.set(k, v);
-  }
-  return response;
-}
 
 export async function POST(request: Request) {
   try {
@@ -39,50 +26,28 @@ export async function POST(request: Request) {
       return withNoStore(parsed.response);
     }
 
-    const otpRecord = await getResetOtp();
-    if (!otpRecord) {
+    const ticketValid = await consumeVerificationTicket(
+      "forgot_reset",
+      parsed.data.verificationToken,
+    );
+    if (!ticketValid) {
       return withNoStore(
         jsonError(
-          "Kode verifikasi sudah kedaluwarsa atau belum diminta.",
-          "OTP_EXPIRED_OR_MISSING",
-          400,
-        ),
-      );
-    }
-
-    const validOtp = verifyOtpHmac(parsed.data.otp, otpRecord.salt, otpRecord.otpHash);
-    if (!validOtp) {
-      const next = await incrementResetOtpAttempts(otpRecord);
-      if (next.exhausted) {
-        return withNoStore(
-          jsonError(
-            "Terlalu banyak percobaan salah, kode hangus. Silakan minta kode baru.",
-            "OTP_ATTEMPTS_EXCEEDED",
-            429,
-            { remainingAttempts: 0 },
-          ),
-        );
-      }
-
-      return withNoStore(
-        jsonError(
-          `Kode verifikasi tidak cocok. Sisa percobaan: ${next.remainingAttempts} kali.`,
-          "INVALID_OTP",
+          "Sesi verifikasi OTP sudah habis atau tidak valid. Silakan minta dan verifikasi kode OTP baru.",
+          "VERIFICATION_EXPIRED",
           401,
-          { remainingAttempts: next.remainingAttempts },
         ),
       );
     }
 
-    // Kode OTP valid: simpan PIN 6 digit baru, hapus OTP (single-use), clear rate limit IP, dan rotasi session_version.
     const ipHash = hashClientIp(getClientIp(request));
-    await deleteResetOtp();
     await clearLoginRateLimit(ipHash);
     const { updatedAt } = await setActivePinConfig(parsed.data.newPin, "pin_reset");
 
     try {
       const senderName = await getActiveSenderName();
       await sendPinResetSuccessEmail({
+        purpose: "forgot_reset",
         resetAtWibLabel: `${getNowWibTimeLabel()} WIB`,
         senderName,
       });

@@ -4,6 +4,7 @@ import {
   jsonOk,
   parseJsonBody,
   requireAuthenticatedSession,
+  withNoStore,
 } from "@/lib/api-helpers";
 import { verifyAttendanceToken } from "@/lib/security";
 import { appendActivityLog, setAttendanceConfirmed } from "@/lib/store";
@@ -53,15 +54,17 @@ export async function POST(request: Request) {
         });
       }
 
-      return jsonOk(
-        alreadyConfirmed
-          ? `Absen untuk ${formatWibDateIndonesian(targetDate)} sudah tercatat sebelumnya.`
-          : `Absen untuk ${formatWibDateIndonesian(targetDate)} berhasil dikonfirmasi.`,
-        {
-          dateWib: targetDate,
-          alreadyConfirmed,
-          record,
-        },
+      return withNoStore(
+        jsonOk(
+          alreadyConfirmed
+            ? `Absen untuk ${formatWibDateIndonesian(targetDate)} sudah tercatat sebelumnya.`
+            : `Absen untuk ${formatWibDateIndonesian(targetDate)} berhasil dikonfirmasi.`,
+          {
+            dateWib: targetDate,
+            alreadyConfirmed,
+            record,
+          },
+        ),
       );
     }
 
@@ -93,15 +96,17 @@ export async function POST(request: Request) {
       });
     }
 
-    return jsonOk(
-      alreadyConfirmed
-        ? `Absen untuk ${formatWibDateIndonesian(date)} sudah tercatat sebelumnya.`
-        : `Terima kasih! Absen untuk ${formatWibDateIndonesian(date)} berhasil dikonfirmasi.`,
-      {
-        dateWib: date,
-        alreadyConfirmed,
-        record,
-      },
+    return withNoStore(
+      jsonOk(
+        alreadyConfirmed
+          ? `Absen untuk ${formatWibDateIndonesian(date)} sudah tercatat sebelumnya.`
+          : `Terima kasih! Absen untuk ${formatWibDateIndonesian(date)} berhasil dikonfirmasi.`,
+        {
+          dateWib: date,
+          alreadyConfirmed,
+          record,
+        },
+      ),
     );
   } catch (error) {
     return handleRouteError(error, "Gagal menyimpan konfirmasi absen.");

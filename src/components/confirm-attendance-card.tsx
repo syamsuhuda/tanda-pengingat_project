@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { AlertCircle, CheckCircle2, Clock, PartyPopper, ShieldAlert } from "lucide-react";
+import { formatIsoToWibTime } from "@/lib/timezone";
 import type { ConfirmedBy } from "@/lib/types";
 
 export type ConfirmInitialState =
@@ -71,14 +72,7 @@ export function ConfirmAttendanceCard({
       }
 
       if (body.data?.record?.confirmedAt) {
-        const parsed = new Date(body.data.record.confirmedAt);
-        const formatted = new Intl.DateTimeFormat("id-ID", {
-          timeZone: "Asia/Jakarta",
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-        }).format(parsed);
-        setConfirmedTime(`${formatted.replace(".", ":")} WIB`);
+        setConfirmedTime(formatIsoToWibTime(body.data.record.confirmedAt));
         setConfirmedBy(body.data.record.confirmedBy);
       }
 
@@ -93,7 +87,7 @@ export function ConfirmAttendanceCard({
 
   if (status === "already_confirmed") {
     return (
-      <section className="rounded-2xl border border-[var(--success-border)] bg-[var(--surface)] p-6 shadow-sm sm:p-8">
+      <section className="overflow-x-clip rounded-2xl border border-[var(--success-border)] bg-[var(--surface)] p-5 shadow-sm sm:p-8">
         <div className="flex flex-col items-center text-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--success-bg)] text-[var(--success-fg)]">
             <CheckCircle2

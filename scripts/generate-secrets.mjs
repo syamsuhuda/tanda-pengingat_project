@@ -18,7 +18,7 @@ async function resolvePinFromArgsOrPrompt() {
 
   const rl = readline.createInterface({ input, output });
   try {
-    const answer = (await rl.question("Masukkan PIN dashboard (minimal 4 karakter): ")).trim();
+    const answer = (await rl.question("Masukkan PIN dashboard (tepat 6 digit angka): ")).trim();
     return answer;
   } finally {
     rl.close();
@@ -27,8 +27,8 @@ async function resolvePinFromArgsOrPrompt() {
 
 async function main() {
   const pin = await resolvePinFromArgsOrPrompt();
-  if (!pin || pin.length < 4) {
-    console.error("Error: PIN harus berisi minimal 4 karakter.");
+  if (!/^\d{6}$/.test(pin)) {
+    console.error("Error: PIN harus berupa tepat 6 digit angka (contoh: 246810).");
     process.exit(1);
   }
 

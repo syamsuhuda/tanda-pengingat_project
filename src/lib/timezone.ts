@@ -58,6 +58,7 @@ const wibPartsFormatter = new Intl.DateTimeFormat("en-GB", {
   hour: "2-digit",
   minute: "2-digit",
   second: "2-digit",
+  hour12: false,
   hourCycle: "h23",
 });
 
@@ -78,9 +79,9 @@ export function getWibDateParts(date: Date = new Date()): WibDateParts {
     year: Number(map.year),
     month: Number(map.month),
     day: Number(map.day),
-    hour: Number(map.hour),
-    minute: Number(map.minute),
-    second: Number(map.second),
+    hour: Number(map.hour) % 24,
+    minute: Number(map.minute) % 60,
+    second: Number(map.second) % 60,
   };
 }
 
@@ -163,7 +164,7 @@ export function getCurrentWibMinutes(now: Date = new Date()): number {
 }
 
 export function formatHmTimeWibLabel(hm: string): string {
-  return `${hm.replace(":", ".")} WIB`;
+  return `${hm} WIB`;
 }
 
 export const AUTO_DISPATCH_WINDOW_MINUTES = 90;

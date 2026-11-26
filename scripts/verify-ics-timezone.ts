@@ -8,6 +8,7 @@ import {
 import {
   buildAttendanceCalendarSlot,
   buildGoogleCalendarTemplateUrl,
+  escapeIcsParamValue,
   escapeIcsText,
   foldIcsLine,
   generateIcsCalendar,
@@ -16,16 +17,24 @@ import { generateItineraryIntroMessage } from "../src/lib/itinerary-copy";
 import {
   createSessionCookieValue,
   generateNumericOtp6,
+  generateVerificationToken,
   hashOtpHmac,
   hashPin,
   hashPinScrypt,
+  hashPurposeToken,
+  sanitizeEmailHeaderValue,
   sanitizeSenderDisplayName,
   verifyOtpHmac,
   verifyPin,
   verifyPinScrypt,
+  verifyPurposeToken,
   verifySessionCookieValue,
 } from "../src/lib/security";
 import {
+  formatHmTimeWibLabel,
+  formatIsoToWibDateTime,
+  formatIsoToWibTime,
+  getNowWibTimeLabel,
   getTodayWibDate,
   getYesterdayWibDate,
   hmTimeToMinutes,
@@ -400,7 +409,40 @@ function runAllAssertions(): void {
   assert.equal(sanitize6("12a34b56789"), "123456");
   assert.equal(sanitize6("1234567").length, 6);
 
-  console.log("SEMUA VERIFIKASI TIMEZONE, ICS DINAMIS, SANITASI SENDER, EMAIL, BATCH UID, & KEAMANAN PIN LULUS (15/15 suite).");
+  // 16. Sanitasi header email subject & kontrol ASCII pada parameter ICS
+  assert.equal(
+    sanitizeEmailHeaderValue("Judul\r\nBcc: evil@attacker.com\x07\x00"),
+    "Judul Bcc: evil@attacker.com",
+  );
+  assert.equal(escapeIcsParamValue('Panitia\x00\x07\r\n"Tim"'), "Panitia 'Tim'");
+
+  // 17. Tiket verifikasi OTP terikat purpose (cross-purpose ditolak)
+  const vToken = generateVerificationToken();
+  assert.match(vToken, /^[a-f0-9]{64}$/);
+  const vSalt = crypto.randomBytes(16).toString("hex");
+  const changePinTicketHash = hashPurposeToken("change_pin", vToken, vSalt);
+  assert.equal(verifyPurposeToken("change_pin", vToken, vSalt, changePinTicketHash), true);
+  assert.equal(verifyPurposeToken("forgot_reset", vToken, vSalt, changePinTicketHash), false);
+
+  // 18. Standar waktu mutlak 24 jam (HH:mm WIB) tanpa AM/PM untuk 00:05, 12:00, 13:45, 23:59
+  const timeSamples = [
+    { iso: "2026-11-26T17:05:00.000Z", expectedTime: "00:05 WIB", expectedDt: "27 Nov 2026, 00:05 WIB" },
+    { iso: "2026-11-27T05:00:00.000Z", expectedTime: "12:00 WIB", expectedDt: "27 Nov 2026, 12:00 WIB" },
+    { iso: "2026-11-27T06:45:00.000Z", expectedTime: "13:45 WIB", expectedDt: "27 Nov 2026, 13:45 WIB" },
+    { iso: "2026-11-27T16:59:00.000Z", expectedTime: "23:59 WIB", expectedDt: "27 Nov 2026, 23:59 WIB" },
+  ];
+  for (const sample of timeSamples) {
+    const tLabel = formatIsoToWibTime(sample.iso);
+    const dtLabel = formatIsoToWibDateTime(sample.iso);
+    const nowLabel = getNowWibTimeLabel(new Date(sample.iso));
+    assert.equal(tLabel, sample.expectedTime);
+    assert.equal(dtLabel, sample.expectedDt);
+    assert.equal(nowLabel, sample.expectedTime);
+    assert.equal(/\b(am|pm)\b/i.test(`${tLabel} ${dtLabel}`), false);
+  }
+  assert.equal(formatHmTimeWibLabel("09:00"), "09:00 WIB");
+
+  console.log("SEMUA VERIFIKASI TIMEZONE, 24 JAM WIB, ICS DINAMIS, SANITASI HEADER/SENDER, EMAIL, BATCH UID, & KEAMANAN PIN LULUS (18/18 suite).");
 }
 
 runAllAssertions();

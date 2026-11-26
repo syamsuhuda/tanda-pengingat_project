@@ -51,6 +51,13 @@ export function getClientIp(request: Request): string {
   return "unknown";
 }
 
+const MAX_JSON_BODY_BYTES = 64 * 1024; // 64 KB batas aman payload JSON
+
+export function withNoStore<T>(response: NextResponse<T>): NextResponse<T> {
+  response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
+  return response;
+}
+
 export async function parseJsonBody<TSchema extends z.ZodTypeAny>(
   request: Request,
   schema: TSchema,
@@ -58,9 +65,37 @@ export async function parseJsonBody<TSchema extends z.ZodTypeAny>(
   | { success: true; data: z.output<TSchema> }
   | { success: false; response: NextResponse<ApiResponse> }
 > {
+  const contentLengthHeader = request.headers.get("content-length");
+  if (contentLengthHeader) {
+    const declaredLength = Number(contentLengthHeader);
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_JSON_BODY_BYTES) {
+      return {
+        success: false,
+        response: jsonError("Ukuran payload terlalu besar (maksimal 64 KB).", "PAYLOAD_TOO_LARGE", 413),
+      };
+    }
+  }
+
+  let rawText: string;
+  try {
+    rawText = await request.text();
+  } catch {
+    return {
+      success: false,
+      response: jsonError("Gagal membaca payload permintaan.", "INVALID_JSON", 400),
+    };
+  }
+
+  if (Buffer.byteLength(rawText, "utf8") > MAX_JSON_BODY_BYTES) {
+    return {
+      success: false,
+      response: jsonError("Ukuran payload terlalu besar (maksimal 64 KB).", "PAYLOAD_TOO_LARGE", 413),
+    };
+  }
+
   let rawBody: unknown;
   try {
-    rawBody = await request.json();
+    rawBody = JSON.parse(rawText);
   } catch {
     return {
       success: false,
@@ -91,6 +126,10 @@ export function handleRouteError(
 
   if (error instanceof Error && error.message === "DUPLICATE_CONTACT_EMAIL") {
     return jsonError("Alamat email tersebut sudah tersimpan di daftar kontak.", "DUPLICATE_EMAIL", 409);
+  }
+
+  if (error instanceof Error && error.name === "SmtpNoAcceptedRecipientsError") {
+    return jsonError(error.message, "SMTP_DELIVERY_REJECTED", 502);
   }
 
   const detail = error instanceof Error ? error.message : "Terjadi kesalahan internal.";
