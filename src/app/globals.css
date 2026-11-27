@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-@custom-variant dark (&:where(.dark, .dark *));
+@custom-variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
 
 :root {
   --bg: #f4f9fd;
@@ -32,7 +32,8 @@
   --scrollbar-track: transparent;
 }
 
-.dark {
+.dark,
+:root[data-theme="dark"] {
   --bg: #0b111e;
   --surface: #131b2e;
   --surface-elevated: #101727;

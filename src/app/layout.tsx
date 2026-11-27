@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -12,30 +13,6 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
 };
-
-// Terapkan tema tersimpan sebelum body dirender (default Dark Mode) tanpa menimpa pilihan Light Mode saat hydration.
-const THEME_INIT_SCRIPT = `
-(function() {
-  try {
-    var saved = localStorage.getItem("pj_theme");
-    var root = document.documentElement;
-    if (saved === "light") {
-      root.classList.remove("dark");
-      root.dataset.theme = "light";
-      root.style.colorScheme = "light";
-    } else {
-      root.classList.add("dark");
-      root.dataset.theme = "dark";
-      root.style.colorScheme = "dark";
-    }
-  } catch (e) {
-    var root = document.documentElement;
-    root.classList.add("dark");
-    root.dataset.theme = "dark";
-    root.style.colorScheme = "dark";
-  }
-})();
-`;
 
 export default function RootLayout({
   children,

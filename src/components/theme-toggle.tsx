@@ -2,23 +2,24 @@
 
 import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
-
-type ThemeMode = "dark" | "light";
-
-const THEME_STORAGE_KEY = "pj_theme";
+import { THEME_STORAGE_KEY, type ThemeMode } from "@/lib/theme";
 
 function applyThemeToDocument(mode: ThemeMode) {
   const root = document.documentElement;
-  if (mode === "dark") {
-    root.classList.add("dark");
-  } else {
-    root.classList.remove("dark");
-  }
-  root.dataset.theme = mode;
+  root.classList.toggle("dark", mode === "dark");
+  root.setAttribute("data-theme", mode);
   root.style.colorScheme = mode;
 }
 
-function readCurrentThemeFromDom(): ThemeMode {
+function readPersistedOrDomTheme(): ThemeMode {
+  try {
+    const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (saved === "light" || saved === "dark") {
+      return saved;
+    }
+  } catch {
+    // Abaikan jika localStorage dibatasi browser.
+  }
   return document.documentElement.classList.contains("dark") ? "dark" : "light";
 }
 
@@ -27,7 +28,9 @@ export function ThemeToggle() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setTheme(readCurrentThemeFromDom());
+    const actual = readPersistedOrDomTheme();
+    applyThemeToDocument(actual);
+    setTheme(actual);
     setMounted(true);
 
     function handleStorage(event: StorageEvent) {
@@ -42,12 +45,12 @@ export function ThemeToggle() {
   }, []);
 
   function toggleTheme() {
-    const current = readCurrentThemeFromDom();
+    const current = readPersistedOrDomTheme();
     const next: ThemeMode = current === "dark" ? "light" : "dark";
     applyThemeToDocument(next);
     setTheme(next);
     try {
-      localStorage.setItem(THEME_STORAGE_KEY, next);
+      window.localStorage.setItem(THEME_STORAGE_KEY, next);
     } catch {
       // Abaikan jika penyimpanan lokal dibatasi browser.
     }
