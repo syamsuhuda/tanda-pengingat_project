@@ -4,6 +4,7 @@ import { getAppBaseUrl } from "@/lib/env";
 import { sendAttendanceReminder, sendUrgentWithEscalation } from "@/lib/mailer";
 import { createAttendanceToken } from "@/lib/security";
 import {
+  acquireStageProcessingLock,
   appendActivityLog,
   appendActivityLogIfNotDuplicate,
   getActiveCustomMessage,
@@ -15,6 +16,7 @@ import {
   getBotPauseConfig,
   isOffDay,
   recordCronPing,
+  releaseStageProcessingLock,
   setStageSentLock,
   touchDashboardVersion,
 } from "@/lib/store";
@@ -190,136 +192,160 @@ export async function executeCronAttendance(params: {
     const customMessageText = activeCustomMessage?.message ?? null;
     const scheduledTimeWib = formatHmTimeWibLabel(schedule[targetStage].time);
 
-    if (targetStage === "urgent") {
-      const dispatch = await sendUrgentWithEscalation({
-        dateWib: todayWib,
-        recipient,
-        senderName,
-        confirmUrl,
-        dashboardUrl: baseUrl,
-        customMessage: customMessageText,
-        scheduledTimeWib,
-      });
+    const lockAcquired = await acquireStageProcessingLock(todayWib, targetStage, 120);
+    if (!lockAcquired) {
+      await pingSafe("skipped_in_progress", targetStage);
+      return withNoStore(
+        jsonOk("Tahap pengingat ini sedang diproses oleh eksekusi cron lain.", {
+          status: "skipped_in_progress",
+          skipped: true,
+          reason: "in_progress",
+          dateWib: todayWib,
+          stage: targetStage,
+          requestedStage,
+        }),
+      );
+    }
 
-      if (!dispatch.partner.ok && !dispatch.escalation.ok) {
+    try {
+      if (targetStage === "urgent") {
+        const dispatch = await sendUrgentWithEscalation({
+          dateWib: todayWib,
+          recipient,
+          senderName,
+          confirmUrl,
+          dashboardUrl: baseUrl,
+          customMessage: customMessageText,
+          scheduledTimeWib,
+        });
+
+        if (!dispatch.partner.ok && !dispatch.escalation.ok) {
+          await releaseStageProcessingLock(todayWib, "urgent");
+          await Promise.all([
+            appendActivityLog({
+              type: "cron_urgent",
+              summary: `Gagal mengirim peringatan urgent (${scheduledTimeWib}) ke ${recipient.name} dan eskalasi (${todayWib}).`,
+              result: "error",
+            }),
+            pingSafe("smtp_error", "urgent"),
+          ]);
+          return withNoStore(
+            jsonError(
+              "Gagal mengirim email urgent dan email eskalasi.",
+              "SMTP_SEND_FAILED",
+              500,
+              dispatch,
+            ),
+          );
+        }
+
+        if (dispatch.partner.ok) {
+          await setStageSentLock(todayWib, "urgent");
+        }
+        await releaseStageProcessingLock(todayWib, "urgent");
+
+        const bothOk = dispatch.partner.ok && dispatch.escalation.ok;
         await Promise.all([
           appendActivityLog({
             type: "cron_urgent",
-            summary: `Gagal mengirim peringatan urgent (${scheduledTimeWib}) ke ${recipient.name} dan eskalasi (${todayWib}).`,
-            result: "error",
+            summary: bothOk
+              ? `Peringatan urgent (${scheduledTimeWib}) ke ${recipient.name} dan email eskalasi terkirim (${todayWib}).`
+              : `Pengiriman urgent (${scheduledTimeWib}, ${todayWib}) berhasil sebagian (partner: ${dispatch.partner.ok ? "ok" : "gagal"}, eskalasi: ${dispatch.escalation.ok ? "ok" : "gagal"}).`,
+            result: bothOk ? "success" : "partial",
           }),
-          pingSafe("smtp_error", "urgent"),
+          touchDashboardVersion(),
+          pingSafe(bothOk ? "sent" : "partial", "urgent"),
         ]);
+
         return withNoStore(
-          jsonError(
-            "Gagal mengirim email urgent dan email eskalasi.",
-            "SMTP_SEND_FAILED",
-            500,
-            dispatch,
+          jsonOk(
+            bothOk
+              ? "Peringatan urgent dan email eskalasi berhasil dikirim."
+              : "Pengiriman urgent selesai sebagian; cek detail hasil dan log aktivitas.",
+            {
+              status: bothOk ? "sent" : "partial",
+              skipped: false,
+              dateWib: todayWib,
+              stage: targetStage,
+              requestedStage,
+              scheduledTimeWib,
+              dispatch,
+            },
+            bothOk ? 200 : 207,
           ),
         );
       }
 
-      if (dispatch.partner.ok) {
-        await setStageSentLock(todayWib, "urgent");
+      const includeIcs = targetStage === "morning";
+      let sent: { messageId: string };
+      try {
+        sent = await sendAttendanceReminder({
+          stage: targetStage,
+          dateWib: todayWib,
+          recipient,
+          senderName,
+          confirmUrl,
+          includeIcs,
+          customMessage: customMessageText,
+          morningScheduleTime: schedule.morning.time,
+          scheduledTimeWib,
+        });
+      } catch {
+        // Lepaskan lock dan jangan pasang sentLock agar tick berikutnya dapat mencoba ulang.
+        await releaseStageProcessingLock(todayWib, targetStage);
+        await Promise.all([
+          appendActivityLog({
+            type: targetStage === "morning" ? "cron_morning" : "cron_afternoon",
+            summary: `Gagal mengirim pengingat ${STAGE_NAME[targetStage].toLowerCase()} (${scheduledTimeWib}) ke ${recipient.name} via SMTP (${todayWib}).`,
+            result: "error",
+          }),
+          pingSafe("smtp_error", targetStage),
+        ]);
+        return withNoStore(
+          jsonError(
+            `Gagal mengirim email pengingat ${STAGE_NAME[targetStage].toLowerCase()} melalui SMTP.`,
+            "SMTP_SEND_FAILED",
+            500,
+          ),
+        );
       }
 
-      const bothOk = dispatch.partner.ok && dispatch.escalation.ok;
+      const lockTimestamp = await setStageSentLock(todayWib, targetStage);
+      await releaseStageProcessingLock(todayWib, targetStage);
+
       await Promise.all([
         appendActivityLog({
-          type: "cron_urgent",
-          summary: bothOk
-            ? `Peringatan urgent (${scheduledTimeWib}) ke ${recipient.name} dan email eskalasi terkirim (${todayWib}).`
-            : `Pengiriman urgent (${scheduledTimeWib}, ${todayWib}) berhasil sebagian (partner: ${dispatch.partner.ok ? "ok" : "gagal"}, eskalasi: ${dispatch.escalation.ok ? "ok" : "gagal"}).`,
-          result: bothOk ? "success" : "partial",
+          type: targetStage === "morning" ? "cron_morning" : "cron_afternoon",
+          summary:
+            targetStage === "morning"
+              ? `Pengingat pagi (${scheduledTimeWib}) + .ics terkirim ke ${recipient.name} (${todayWib}).`
+              : `Pengecekan sore (${scheduledTimeWib}) terkirim ke ${recipient.name} (${todayWib}).`,
+          result: "success",
         }),
         touchDashboardVersion(),
-        pingSafe(bothOk ? "sent" : "partial", "urgent"),
+        pingSafe("sent", targetStage),
       ]);
 
       return withNoStore(
         jsonOk(
-          bothOk
-            ? "Peringatan urgent dan email eskalasi berhasil dikirim."
-            : "Pengiriman urgent selesai sebagian; cek detail hasil dan log aktivitas.",
+          `Pengingat ${STAGE_NAME[targetStage]} (${scheduledTimeWib}) berhasil dikirim ke ${recipient.name}.`,
           {
-            status: bothOk ? "sent" : "partial",
+            status: "sent",
             skipped: false,
             dateWib: todayWib,
             stage: targetStage,
             requestedStage,
             scheduledTimeWib,
-            dispatch,
+            sentAt: lockTimestamp,
+            messageId: sent.messageId,
+            includeIcs,
           },
-          bothOk ? 200 : 207,
         ),
       );
+    } catch (innerError) {
+      await releaseStageProcessingLock(todayWib, targetStage);
+      throw innerError;
     }
-
-    const includeIcs = targetStage === "morning";
-    let sent: { messageId: string };
-    try {
-      sent = await sendAttendanceReminder({
-        stage: targetStage,
-        dateWib: todayWib,
-        recipient,
-        senderName,
-        confirmUrl,
-        includeIcs,
-        customMessage: customMessageText,
-        morningScheduleTime: schedule.morning.time,
-        scheduledTimeWib,
-      });
-    } catch {
-      // Catat kegagalan SMTP tanpa memasang sentLock agar bisa dicoba ulang di tick berikutnya.
-      await Promise.all([
-        appendActivityLog({
-          type: targetStage === "morning" ? "cron_morning" : "cron_afternoon",
-          summary: `Gagal mengirim pengingat ${STAGE_NAME[targetStage].toLowerCase()} (${scheduledTimeWib}) ke ${recipient.name} via SMTP (${todayWib}).`,
-          result: "error",
-        }),
-        pingSafe("smtp_error", targetStage),
-      ]);
-      return withNoStore(
-        jsonError(
-          `Gagal mengirim email pengingat ${STAGE_NAME[targetStage].toLowerCase()} melalui SMTP.`,
-          "SMTP_SEND_FAILED",
-          500,
-        ),
-      );
-    }
-
-    const lockTimestamp = await setStageSentLock(todayWib, targetStage);
-
-    await Promise.all([
-      appendActivityLog({
-        type: targetStage === "morning" ? "cron_morning" : "cron_afternoon",
-        summary:
-          targetStage === "morning"
-            ? `Pengingat pagi (${scheduledTimeWib}) + .ics terkirim ke ${recipient.name} (${todayWib}).`
-            : `Pengecekan sore (${scheduledTimeWib}) terkirim ke ${recipient.name} (${todayWib}).`,
-        result: "success",
-      }),
-      touchDashboardVersion(),
-      pingSafe("sent", targetStage),
-    ]);
-
-    return withNoStore(
-      jsonOk(
-        `Pengingat ${STAGE_NAME[targetStage]} (${scheduledTimeWib}) berhasil dikirim ke ${recipient.name}.`,
-        {
-          status: "sent",
-          skipped: false,
-          dateWib: todayWib,
-          stage: targetStage,
-          requestedStage,
-          scheduledTimeWib,
-          sentAt: lockTimestamp,
-          messageId: sent.messageId,
-          includeIcs,
-        },
-      ),
-    );
   } catch (error) {
     await pingSafe("error");
     return withNoStore(handleRouteError(error, "Gagal menjalankan cron pengingat absen."));

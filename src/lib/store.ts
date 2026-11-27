@@ -52,6 +52,8 @@ export const ACTIVITY_LOG_MAX_ENTRIES = 30;
 const REDIS_KEYS = {
   attendanceStatus: (dateWib: string) => `absen:status:${dateWib}`,
   attendanceSent: (dateWib: string, stage: AttendanceStage) => `absen:sent:${dateWib}:${stage}`,
+  attendanceProcessing: (dateWib: string, stage: AttendanceStage) =>
+    `absen:processing:${dateWib}:${stage}`,
   botPaused: "bot:config:paused",
   botRecipient: "bot:config:recipient",
   botSender: "bot:config:sender",
@@ -582,6 +584,28 @@ export async function appendActivityLogIfNotDuplicate(input: {
 }
 
 export const CRON_HEALTHY_MAX_AGE_MINUTES = 35;
+
+export async function acquireStageProcessingLock(
+  dateWib: string,
+  stage: AttendanceStage,
+  ttlSeconds = 120,
+): Promise<boolean> {
+  const redis = getRedis();
+  const result = await redis.set(
+    REDIS_KEYS.attendanceProcessing(dateWib, stage),
+    getNowWibIso(),
+    { nx: true, ex: ttlSeconds },
+  );
+  return result === "OK";
+}
+
+export async function releaseStageProcessingLock(
+  dateWib: string,
+  stage: AttendanceStage,
+): Promise<void> {
+  const redis = getRedis();
+  await redis.del(REDIS_KEYS.attendanceProcessing(dateWib, stage));
+}
 
 export async function recordCronPing(input: {
   status: string;

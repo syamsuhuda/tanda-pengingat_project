@@ -393,7 +393,8 @@ export function AttendanceTab({
                 <span className="inline-flex items-center gap-1 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-2.5 py-1 text-[11px] font-medium text-[var(--ink-muted)]">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
                   <span>
-                    Scheduler aktif ·{" "}
+                    Scheduler aktif
+                    {data.cronHealth.source ? ` (${data.cronHealth.source})` : ""} ·{" "}
                     {data.cronHealth.minutesSinceLastPing === 0
                       ? "baru saja"
                       : `${data.cronHealth.minutesSinceLastPing} mnt lalu`}
@@ -525,7 +526,7 @@ export function AttendanceTab({
                 <p className="font-bold">
                   {data.cronHealth.status === "never"
                     ? "Scheduler otomatis belum memanggil server"
-                    : `Scheduler terakhir aktif ${data.cronHealth.minutesSinceLastPing} menit lalu`}
+                    : `Scheduler${data.cronHealth.source ? ` (${data.cronHealth.source})` : ""} terakhir aktif ${data.cronHealth.minutesSinceLastPing} menit lalu`}
                 </p>
                 <p className="mt-0.5 leading-relaxed opacity-90">
                   {data.cronHealth.status === "never"

@@ -6,17 +6,28 @@ import { cronAttendanceSchema } from "@/lib/validators";
 
 export const dynamic = "force-dynamic";
 
-async function resolveRequestedStage(
+function sanitizeCronSource(raw: string | undefined | null): string | undefined {
+  if (!raw) return undefined;
+  const cleaned = raw.trim().replace(/[^a-zA-Z0-9._-]/g, "").slice(0, 40);
+  return cleaned || undefined;
+}
+
+async function resolveCronPayload(
   request: Request,
 ): Promise<
-  | { ok: true; stage: "auto" | AttendanceStage }
+  | { ok: true; stage: "auto" | AttendanceStage; bodySource?: string }
   | { ok: false; response: ReturnType<typeof jsonError> }
 > {
-  const queryStage = new URL(request.url).searchParams.get("stage")?.trim();
+  const url = new URL(request.url);
+  const queryStage = url.searchParams.get("stage")?.trim();
+  const querySource = url.searchParams.get("source")?.trim();
   const rawBody = request.method === "GET" ? "" : await request.text();
 
   if (!rawBody.trim()) {
-    const parsed = cronAttendanceSchema.safeParse(queryStage ? { stage: queryStage } : {});
+    const parsed = cronAttendanceSchema.safeParse({
+      ...(queryStage ? { stage: queryStage } : {}),
+      ...(querySource ? { source: querySource } : {}),
+    });
     if (!parsed.success) {
       return {
         ok: false,
@@ -27,7 +38,11 @@ async function resolveRequestedStage(
         ),
       };
     }
-    return { ok: true, stage: parsed.data.stage };
+    return {
+      ok: true,
+      stage: parsed.data.stage,
+      bodySource: sanitizeCronSource(parsed.data.source),
+    };
   }
 
   let bodyObj: unknown;
@@ -52,7 +67,32 @@ async function resolveRequestedStage(
     };
   }
 
-  return { ok: true, stage: parsed.data.stage };
+  return {
+    ok: true,
+    stage: parsed.data.stage,
+    bodySource: sanitizeCronSource(parsed.data.source ?? querySource),
+  };
+}
+
+function resolveCronSource(request: Request, bodySource?: string): string {
+  if (bodySource) {
+    return bodySource;
+  }
+
+  const headerSource = sanitizeCronSource(request.headers.get("x-cron-source"));
+  if (headerSource) {
+    return headerSource;
+  }
+
+  const userAgent = (request.headers.get("user-agent") ?? "").toLowerCase();
+  if (userAgent.includes("cron-job")) {
+    return "cron-job.org";
+  }
+  if (userAgent.includes("github-actions") || userAgent.includes("curl")) {
+    return "github-actions";
+  }
+
+  return "external-cron";
 }
 
 async function handleCronRequest(request: Request) {
@@ -63,21 +103,16 @@ async function handleCronRequest(request: Request) {
     );
   }
 
-  const stageResult = await resolveRequestedStage(request);
-  if (!stageResult.ok) {
-    return withNoStore(stageResult.response);
+  const payloadResult = await resolveCronPayload(request);
+  if (!payloadResult.ok) {
+    return withNoStore(payloadResult.response);
   }
 
-  const userAgent = request.headers.get("user-agent") ?? "";
-  const source = userAgent.toLowerCase().includes("cron-job")
-    ? "cron-job.org"
-    : userAgent.toLowerCase().includes("curl")
-      ? "github_actions"
-      : request.method.toLowerCase();
+  const source = resolveCronSource(request, payloadResult.bodySource);
 
   return executeCronAttendance({
     request,
-    requestedStage: stageResult.stage,
+    requestedStage: payloadResult.stage,
     source,
     trackCronPing: true,
   });

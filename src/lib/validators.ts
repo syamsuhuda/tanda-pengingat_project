@@ -86,6 +86,12 @@ export const forgotPinResetSchema = z
 
 export const cronAttendanceSchema = z.object({
   stage: z.enum(["auto", "morning", "afternoon", "urgent"]).default("auto"),
+  source: z
+    .string()
+    .trim()
+    .max(40, "Nama sumber cron maksimal 40 karakter")
+    .optional()
+    .transform((val) => (val ? val : undefined)),
 });
 
 export const confirmAttendanceSchema = z.union([

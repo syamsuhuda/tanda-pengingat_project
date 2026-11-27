@@ -2,8 +2,8 @@ name: Daily Attendance Reminder Cron
 
 on:
   schedule:
-    # Cadangan otomatis setiap 15 menit (24 jam) mengikuti jam fleksibel di dashboard
-    - cron: "*/15 * * * *"
+    # Backup scheduler 1x per jam di menit ke-17 (hemat kuota repo private, tidak bertabrakan dengan cron-job.org 5 menit)
+    - cron: "17 * * * *"
   workflow_dispatch:
     inputs:
       stage:
@@ -68,5 +68,5 @@ jobs:
             -X POST "$TARGET_URL" \
             -H "Authorization: Bearer ${CRON_SECRET}" \
             -H "Content-Type: application/json" \
-            -d "{\"stage\":\"${STAGE}\"}"
+            -d "{\"stage\":\"${STAGE}\",\"source\":\"github-actions\"}"
           echo ""
