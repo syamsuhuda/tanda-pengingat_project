@@ -279,43 +279,52 @@ export const itinerarySessionSchema = z
     path: ["endTime"],
   });
 
-export const sendItinerarySchema = z.object({
-  mode: z.enum(["date", "event", "friends"]),
-  contactIds: z.array(z.string().trim().min(1)).max(30).default([]),
-  manualEmails: z
-    .array(z.string().trim().email("Salah satu email manual tidak valid").max(160))
-    .max(30)
-    .default([]),
-  senderName: z
-    .string()
-    .trim()
-    .min(1, "Nama pengirim minimal 1 karakter")
-    .max(60, "Nama pengirim maksimal 60 karakter")
-    .optional()
-    .transform((val) => (val ? val : undefined)),
-  categoryLabel: z
-    .string()
-    .trim()
-    .min(1, "Kategori acara minimal 1 karakter")
-    .max(40, "Kategori acara maksimal 40 karakter")
-    .optional()
-    .transform((val) => (val ? val : undefined)),
-  messageTone: z.enum(["formal", "natural", "casual", "custom"]).optional().default("natural"),
-  customIntroMessage: z
-    .string()
-    .trim()
-    .max(600, "Pesan pembuka maksimal 600 karakter")
-    .optional()
-    .transform((val) => (val ? val : undefined)),
-  subject: z
-    .string()
-    .trim()
-    .min(1, "Subjek email wajib diisi")
-    .max(180, "Subjek maksimal 180 karakter"),
-  alarmMinutes: z.union([z.literal(15), z.literal(30), z.literal(60)]).default(30),
-  icsMode: z.enum(["combined", "separate"]).default("combined"),
-  sessions: z
-    .array(itinerarySessionSchema)
-    .min(1, "Minimal harus ada 1 sesi acara")
-    .max(15, "Maksimal 15 sesi dalam satu itinerary"),
-});
+export const sendItinerarySchema = z
+  .object({
+    mode: z.enum(["date", "event", "friends"]),
+    contactIds: z.array(z.string().trim().min(1)).max(30).default([]),
+    manualEmails: z
+      .array(z.string().trim().email("Salah satu email manual tidak valid").max(160))
+      .max(30)
+      .default([]),
+    senderName: z
+      .string()
+      .trim()
+      .max(60, "Nama pengirim maksimal 60 karakter")
+      .optional()
+      .transform((val) => (val ? val : undefined)),
+    categoryLabel: z
+      .string()
+      .trim()
+      .min(1, "Kategori acara minimal 1 karakter")
+      .max(40, "Kategori acara maksimal 40 karakter")
+      .optional()
+      .transform((val) => (val ? val : undefined)),
+    messageTone: z.enum(["formal", "natural", "casual", "custom"]).optional().default("natural"),
+    customIntroMessage: z
+      .string()
+      .trim()
+      .max(600, "Pesan pembuka maksimal 600 karakter")
+      .optional()
+      .transform((val) => (val ? val : undefined)),
+    subject: z
+      .string()
+      .trim()
+      .min(1, "Subjek email wajib diisi")
+      .max(180, "Subjek maksimal 180 karakter"),
+    alarmMinutes: z.union([z.literal(15), z.literal(30), z.literal(60)]).default(30),
+    icsMode: z.enum(["combined", "separate"]).default("combined"),
+    sessions: z
+      .array(itinerarySessionSchema)
+      .min(1, "Minimal harus ada 1 sesi acara")
+      .max(15, "Maksimal 15 sesi dalam satu itinerary"),
+  })
+  .superRefine((data, ctx) => {
+    if (data.mode !== "date" && (!data.senderName || data.senderName.trim().length === 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Nama pengirim wajib diisi untuk mode Acara & Kegiatan.",
+        path: ["senderName"],
+      });
+    }
+  });

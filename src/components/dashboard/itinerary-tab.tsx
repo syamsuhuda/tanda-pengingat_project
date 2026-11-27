@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   ArrowLeft,
@@ -115,9 +115,10 @@ function createInitialDraft(
   partnerName: string,
 ): ModeDraft {
   const defaultCategory = DEFAULT_CATEGORY_BY_MODE[mode];
+  const initialSender = mode === "date" ? defaultSenderName : "";
   return {
     subject: "",
-    senderName: defaultSenderName,
+    senderName: initialSender,
     senderDirty: false,
     categoryLabel: defaultCategory,
     categoryIsCustom: false,
@@ -125,7 +126,7 @@ function createInitialDraft(
     introMessage: generateItineraryIntroMessage({
       mode,
       tone: "natural",
-      senderName: defaultSenderName,
+      senderName: initialSender,
       recipientName: mode === "date" ? partnerName : undefined,
       categoryLabel: defaultCategory,
       sessionCount: 1,
@@ -170,6 +171,8 @@ export function ItineraryTab({
   const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false);
   const [activeGroupFilter, setActiveGroupFilter] = useState<string>("ALL");
   const [submitting, setSubmitting] = useState(false);
+  const [eventSenderError, setEventSenderError] = useState<string | null>(null);
+  const eventSenderInputRef = useRef<HTMLInputElement>(null);
 
   const activeDraft = drafts[mode];
   const feedback = feedbackByMode[mode];
@@ -196,33 +199,31 @@ export function ItineraryTab({
     }));
   }
 
-  // Sinkronkan defaultSenderName untuk draft yang belum diubah manual.
+  // Sinkronkan defaultSenderName HANYA untuk draft mode date yang belum diubah manual.
   useEffect(() => {
     setDrafts((prev) => {
-      let changed = false;
-      const next = { ...prev };
-      for (const m of ["date", "event"] as const) {
-        const d = prev[m];
-        if (!d.senderDirty && d.senderName !== defaultSenderName) {
-          changed = true;
-          next[m] = {
-            ...d,
-            senderName: defaultSenderName,
-            introMessage:
-              !d.introEditedManually && d.messageTone !== "custom"
-                ? generateItineraryIntroMessage({
-                    mode: m,
-                    tone: d.messageTone,
-                    senderName: defaultSenderName,
-                    recipientName: m === "date" ? partnerName : undefined,
-                    categoryLabel: d.categoryLabel,
-                    sessionCount: d.sessions.length,
-                  })
-                : d.introMessage,
-          };
-        }
+      const d = prev.date;
+      if (d.senderDirty || d.senderName === defaultSenderName) {
+        return prev;
       }
-      return changed ? next : prev;
+      return {
+        ...prev,
+        date: {
+          ...d,
+          senderName: defaultSenderName,
+          introMessage:
+            !d.introEditedManually && d.messageTone !== "custom"
+              ? generateItineraryIntroMessage({
+                  mode: "date",
+                  tone: d.messageTone,
+                  senderName: defaultSenderName,
+                  recipientName: partnerName,
+                  categoryLabel: d.categoryLabel,
+                  sessionCount: d.sessions.length,
+                })
+              : d.introMessage,
+        },
+      };
     });
   }, [defaultSenderName, partnerName]);
 
@@ -328,6 +329,9 @@ export function ItineraryTab({
     updateDraft(targetMode, () =>
       createInitialDraft(targetMode, todayWib, defaultSenderName, partnerName),
     );
+    if (targetMode === "event") {
+      setEventSenderError(null);
+    }
     setModeFeedback(targetMode, null);
   }
 
@@ -341,7 +345,10 @@ export function ItineraryTab({
         merged.introMessage = generateItineraryIntroMessage({
           mode: targetMode,
           tone: merged.messageTone,
-          senderName: merged.senderName.trim() || defaultSenderName,
+          senderName:
+            targetMode === "date"
+              ? merged.senderName.trim() || defaultSenderName
+              : merged.senderName.trim(),
           recipientName: targetMode === "date" ? partnerName : undefined,
           categoryLabel: merged.categoryLabel,
           sessionCount: merged.sessions.length,
@@ -573,6 +580,15 @@ export function ItineraryTab({
       finalManualEmails = Array.from(new Set([...finalManualEmails, pendingEmail]));
     }
 
+    if (submittedMode === "event" && !draft.senderName.trim()) {
+      const msg = "Isi nama pengirim terlebih dahulu sebelum mengirim undangan acara.";
+      setEventSenderError(msg);
+      setModeFeedback(submittedMode, { type: "error", text: msg });
+      eventSenderInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      eventSenderInputRef.current?.focus();
+      return;
+    }
+
     const cleanSubject = draft.subject.trim() || draft.sessions[0]?.title.trim() || "";
     if (!cleanSubject) {
       setModeFeedback(submittedMode, {
@@ -625,7 +641,10 @@ export function ItineraryTab({
 
     setSubmitting(true);
 
-    const resolvedSenderName = draft.senderName.trim() || defaultSenderName;
+    const resolvedSenderName =
+      submittedMode === "date"
+        ? draft.senderName.trim() || defaultSenderName
+        : draft.senderName.trim();
     const resolvedCategoryLabel =
       draft.categoryLabel.trim() || DEFAULT_CATEGORY_BY_MODE[submittedMode];
 
@@ -850,7 +869,47 @@ export function ItineraryTab({
                 </span>
               </div>
             ) : (
-              <div className="mt-3 space-y-2.5">
+              <div className="mt-3 space-y-3">
+                <div>
+                  <label
+                    htmlFor="event-sender-name-primary"
+                    className="block text-xs font-semibold text-[var(--ink)]"
+                  >
+                    Nama Pengirim <span className="text-[var(--danger-fg)]">*</span>
+                  </label>
+                  <input
+                    ref={eventSenderInputRef}
+                    id="event-sender-name-primary"
+                    type="text"
+                    required
+                    maxLength={60}
+                    aria-invalid={Boolean(eventSenderError)}
+                    value={drafts.event.senderName}
+                    onChange={(event) => {
+                      if (eventSenderError) setEventSenderError(null);
+                      patchActiveDraftAutoIntro("event", {
+                        senderName: event.target.value,
+                        senderDirty: true,
+                      });
+                    }}
+                    placeholder="Tulis namamu / nama penyelenggara, mis. Syamsu"
+                    className={`mt-1 min-h-[44px] w-full rounded-xl border bg-[var(--surface-elevated)] px-3.5 text-base text-[var(--ink)] placeholder:text-[var(--ink-muted)] sm:text-sm ${
+                      eventSenderError
+                        ? "border-[var(--danger-border)] ring-1 ring-[var(--danger-border)]"
+                        : "border-[var(--border-control)]"
+                    }`}
+                  />
+                  {eventSenderError ? (
+                    <p role="alert" className="mt-1 text-xs font-medium text-[var(--danger-fg)]">
+                      {eventSenderError}
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-[11px] text-[var(--ink-muted)]">
+                      Nama ini tampil sebagai pengirim undangan di Gmail &amp; Google Calendar penerima.
+                    </p>
+                  )}
+                </div>
+
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -1247,8 +1306,16 @@ export function ItineraryTab({
 
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3.5 py-2.5">
               <p className="text-xs text-[var(--ink-muted)]">
-                <strong className="font-semibold text-[var(--ink)]">
-                  {activeDraft.senderName.trim() || defaultSenderName}
+                <strong
+                  className={`font-semibold ${
+                    mode === "event" && !activeDraft.senderName.trim()
+                      ? "text-[var(--warning-fg)]"
+                      : "text-[var(--ink)]"
+                  }`}
+                >
+                  {mode === "date"
+                    ? activeDraft.senderName.trim() || defaultSenderName
+                    : activeDraft.senderName.trim() || "Nama pengirim belum diisi"}
                 </strong>
                 {" · "}
                 {activeDraft.categoryLabel.trim() || DEFAULT_CATEGORY_BY_MODE[mode]}
@@ -1284,13 +1351,13 @@ export function ItineraryTab({
                         htmlFor="itinerary-sender-name"
                         className="block text-xs font-semibold text-[var(--ink)]"
                       >
-                        Nama Pengirim Email
+                        Nama Pengirim Email{mode === "event" ? " *" : ""}
                       </label>
-                      {activeDraft.senderName.trim() !== defaultSenderName ? (
+                      {mode === "date" && activeDraft.senderName.trim() !== defaultSenderName ? (
                         <button
                           type="button"
                           onClick={() =>
-                            patchActiveDraftAutoIntro(mode, {
+                            patchActiveDraftAutoIntro("date", {
                               senderName: defaultSenderName,
                               senderDirty: false,
                             })
@@ -1306,13 +1373,20 @@ export function ItineraryTab({
                       type="text"
                       maxLength={60}
                       value={activeDraft.senderName}
-                      onChange={(event) =>
+                      onChange={(event) => {
+                        if (mode === "event" && eventSenderError) {
+                          setEventSenderError(null);
+                        }
                         patchActiveDraftAutoIntro(mode, {
                           senderName: event.target.value,
                           senderDirty: true,
-                        })
+                        });
+                      }}
+                      placeholder={
+                        mode === "date"
+                          ? defaultSenderName
+                          : "Tulis namamu / nama penyelenggara"
                       }
-                      placeholder={defaultSenderName}
                       className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3 text-base text-[var(--ink)] sm:text-sm"
                     />
                   </div>

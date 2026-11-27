@@ -41,7 +41,8 @@ export function generateItineraryIntroMessage(params: {
   sessionCount: number;
 }): string {
   const mode = normalizeItineraryMode(params.mode);
-  const sender = params.senderName.trim() || "Pengirim";
+  const sender =
+    params.senderName.trim() || (mode === "date" ? "Pengirim" : "[Nama Pengirim]");
   const partner = params.recipientName?.trim() || "kamu";
   const category = params.categoryLabel.trim() || DEFAULT_CATEGORY_BY_MODE[mode];
   const isMulti = params.sessionCount > 1;

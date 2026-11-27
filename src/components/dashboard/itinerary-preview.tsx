@@ -51,7 +51,10 @@ export function ItineraryPreview({
   footerActions,
   sticky = true,
 }: ItineraryPreviewProps) {
-  const displaySender = senderName.trim() || "Pengirim";
+  const isSenderMissingInEvent = mode !== "date" && senderName.trim().length === 0;
+  const displaySender = isSenderMissingInEvent
+    ? "Belum diisi (wajib diisi)"
+    : senderName.trim() || "Pengirim";
   const displayCategory = categoryLabel.trim() || (mode === "date" ? "Date Plan" : "Event Plan");
   const displayIntro = introMessage.trim();
   const displayRecipient =
@@ -102,7 +105,14 @@ export function ItineraryPreview({
 
         <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs font-medium text-[var(--ink-muted)]">
           <span>
-            Dari: <strong className="font-semibold text-[var(--ink)]">{displaySender}</strong>
+            Dari:{" "}
+            <strong
+              className={`font-semibold ${
+                isSenderMissingInEvent ? "text-[var(--warning-fg)]" : "text-[var(--ink)]"
+              }`}
+            >
+              {displaySender}
+            </strong>
           </span>
           <span aria-hidden="true">·</span>
           <span>

@@ -47,7 +47,7 @@ import {
   resolveWibSessionUtcRange,
   shiftYmdDate,
 } from "../src/lib/timezone";
-import { scheduleConfigSchema } from "../src/lib/validators";
+import { scheduleConfigSchema, sendItinerarySchema } from "../src/lib/validators";
 
 function unfoldIcs(ics: string): string {
   return ics.replace(/\r\n[ \t]/g, "");
@@ -358,6 +358,30 @@ function runAllAssertions(): void {
   assert.ok(formalEventIntro.includes("Panitia Acara"));
   assert.ok(formalEventIntro.includes("Meeting & Diskusi"));
   assert.ok(formalEventIntro.includes("2 sesi"));
+
+  const emptyEventIntro = generateItineraryIntroMessage({
+    mode: "event",
+    tone: "natural",
+    senderName: "",
+    categoryLabel: "Event Plan",
+    sessionCount: 1,
+  });
+  assert.ok(emptyEventIntro.includes("[Nama Pengirim]"));
+
+  const validDatePayload = sendItinerarySchema.safeParse({
+    mode: "date",
+    subject: "Weekend Date",
+    sessions: [{ title: "Dinner", date: "2026-11-26", startTime: "19:00", endTime: "21:00" }],
+  });
+  assert.equal(validDatePayload.success, true);
+
+  const missingEventSender = sendItinerarySchema.safeParse({
+    mode: "event",
+    senderName: "   ",
+    subject: "Gathering",
+    sessions: [{ title: "Sesi 1", date: "2026-11-26", startTime: "19:00", endTime: "21:00" }],
+  });
+  assert.equal(missingEventSender.success, false);
 
   const xssSessionSlot = resolveWibSessionUtcRange("2026-11-26", "18:00", "19:30");
   const xssItineraryEmail = buildItineraryEmail({

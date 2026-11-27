@@ -406,7 +406,7 @@ export function BotSettingsCard({
                 htmlFor="settings-sender-name"
                 className="block text-xs font-semibold text-[var(--ink)]"
               >
-                Nama Pengirim Default (tampil di Gmail &amp; Google Calendar)
+                Nama Pengirim untuk Pasangan
               </label>
               <div className="mt-1 flex flex-col gap-2 sm:flex-row">
                 <input
@@ -420,7 +420,7 @@ export function BotSettingsCard({
                     setSenderDirty(true);
                     if (senderFeedback) setSenderFeedback(null);
                   }}
-                  placeholder="Nama pengirim email"
+                  placeholder="Nama pengirim email pasangan"
                   className="min-h-[44px] min-w-0 flex-1 rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-base text-[var(--ink)] sm:text-sm"
                 />
                 <button
@@ -431,6 +431,9 @@ export function BotSettingsCard({
                   {savingSender ? "Menyimpan..." : "Simpan Pengirim"}
                 </button>
               </div>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--ink-muted)]">
+                Dipakai untuk Pengingat Absen &amp; Date Itinerary saja (tidak terbawa ke Acara &amp; Kegiatan).
+              </p>
             </div>
 
             {senderFeedback ? (

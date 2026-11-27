@@ -51,7 +51,20 @@ export async function POST(request: Request) {
     } = parsed.data;
 
     const mode = normalizeItineraryMode(rawMode);
-    const resolvedSenderName = customSenderName ?? (await getActiveSenderName());
+    let resolvedSenderName: string;
+    if (mode === "date") {
+      resolvedSenderName = customSenderName ?? (await getActiveSenderName());
+    } else {
+      const explicitSender = customSenderName?.trim() ?? "";
+      if (!explicitSender) {
+        return jsonError(
+          "Nama pengirim wajib diisi untuk mode Acara & Kegiatan.",
+          "SENDER_NAME_REQUIRED",
+          400,
+        );
+      }
+      resolvedSenderName = explicitSender;
+    }
     const resolvedCategoryLabel = customCategoryLabel ?? DEFAULT_CATEGORY_BY_MODE[mode];
 
     let recipients: RecipientAddress[] = [];
