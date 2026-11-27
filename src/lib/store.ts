@@ -11,7 +11,7 @@ import {
   verifyPinScrypt,
   verifyPurposeToken,
 } from "./security";
-import { getNowWibIso, isValidHmTime, isValidYmdDate } from "./timezone";
+import { getNowWibIso, getNowWibTimeLabel, isValidHmTime, isValidYmdDate } from "./timezone";
 import type {
   ActivePinConfig,
   ActiveRecipientConfig,
@@ -24,6 +24,8 @@ import type {
   AttendanceStatusRecord,
   BotPauseConfig,
   ConfirmedBy,
+  CronHealthSummary,
+  CronPingRecord,
   CustomMessageConfig,
   CustomMessageScope,
   FriendContact,
@@ -57,6 +59,7 @@ const REDIS_KEYS = {
   botOffDays: "bot:config:off_days",
   botSchedule: "bot:config:schedule",
   dashboardVersion: "bot:meta:version",
+  lastCronPing: "bot:meta:last_cron_ping",
   friendContacts: "contacts:friends",
   activityLogs: "logs:activity",
   authPinConfig: "auth:config:pin",
@@ -578,6 +581,68 @@ export async function appendActivityLogIfNotDuplicate(input: {
   return appendActivityLog(input);
 }
 
+export const CRON_HEALTHY_MAX_AGE_MINUTES = 35;
+
+export async function recordCronPing(input: {
+  status: string;
+  stageTriggered?: string | null;
+  source?: string | null;
+}): Promise<CronPingRecord> {
+  const now = new Date();
+  const record: CronPingRecord = {
+    timestamp: now.toISOString(),
+    wibTime: getNowWibTimeLabel(now),
+    status: input.status,
+    stageTriggered: input.stageTriggered ?? null,
+    source: input.source ?? null,
+  };
+  const redis = getRedis();
+  await redis.set(REDIS_KEYS.lastCronPing, JSON.stringify(record));
+  return record;
+}
+
+export function buildCronHealthSummary(
+  rawPing: unknown,
+  now: Date = new Date(),
+): CronHealthSummary {
+  const parsed = parseStoredJson<CronPingRecord>(rawPing);
+  if (!parsed || typeof parsed.timestamp !== "string") {
+    return {
+      status: "never",
+      lastPingAt: null,
+      lastPingWib: null,
+      lastStatus: null,
+      stageTriggered: null,
+      source: null,
+      minutesSinceLastPing: null,
+    };
+  }
+
+  const pingMs = Date.parse(parsed.timestamp);
+  if (!Number.isFinite(pingMs)) {
+    return {
+      status: "never",
+      lastPingAt: null,
+      lastPingWib: null,
+      lastStatus: null,
+      stageTriggered: null,
+      source: null,
+      minutesSinceLastPing: null,
+    };
+  }
+
+  const minutesSinceLastPing = Math.max(0, Math.floor((now.getTime() - pingMs) / 60_000));
+  return {
+    status: minutesSinceLastPing <= CRON_HEALTHY_MAX_AGE_MINUTES ? "healthy" : "delayed",
+    lastPingAt: parsed.timestamp,
+    lastPingWib: typeof parsed.wibTime === "string" ? parsed.wibTime : getNowWibTimeLabel(new Date(pingMs)),
+    lastStatus: typeof parsed.status === "string" ? parsed.status : null,
+    stageTriggered: typeof parsed.stageTriggered === "string" ? parsed.stageTriggered : null,
+    source: typeof parsed.source === "string" ? parsed.source : null,
+    minutesSinceLastPing,
+  };
+}
+
 export interface DashboardRawSnapshot {
   attendance: AttendanceStatusRecord | null;
   sentMap: Record<AttendanceStage, string | null>;
@@ -589,6 +654,7 @@ export interface DashboardRawSnapshot {
   customMessage: CustomMessageConfig | null;
   upcomingOffDays: OffDayEntry[];
   schedule: AttendanceScheduleConfig;
+  cronHealth: CronHealthSummary;
   version: string;
 }
 
@@ -613,6 +679,7 @@ export async function getDashboardSnapshotViaPipeline(
   pipeline.get(REDIS_KEYS.dashboardVersion);
   pipeline.get(REDIS_KEYS.botSender);
   pipeline.get(REDIS_KEYS.authPinConfig);
+  pipeline.get(REDIS_KEYS.lastCronPing);
 
   const results = await pipeline.exec<unknown[]>();
 
@@ -740,6 +807,8 @@ export async function getDashboardSnapshotViaPipeline(
       rawPinConfig.length === 6,
   );
 
+  const cronHealth = buildCronHealthSummary(results[13]);
+
   return {
     attendance,
     sentMap,
@@ -751,6 +820,7 @@ export async function getDashboardSnapshotViaPipeline(
     customMessage,
     upcomingOffDays,
     schedule,
+    cronHealth,
     version,
   };
 }

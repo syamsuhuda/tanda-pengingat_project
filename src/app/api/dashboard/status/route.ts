@@ -10,9 +10,11 @@ import {
 import {
   formatHmTimeWibLabel,
   formatWibDateIndonesian,
+  getCurrentWibMinutes,
   getNowWibIso,
   getNowWibTimeLabel,
   getTodayWibDate,
+  isStageMissedWib,
   shiftYmdDate,
 } from "@/lib/timezone";
 import type {
@@ -83,6 +85,8 @@ export async function GET(request: Request) {
       ? { isOff: true, ...(todayOffEntry.note ? { note: todayOffEntry.note } : {}) }
       : { isOff: false };
 
+    const nowMinutesWib = getCurrentWibMinutes(now);
+
     const timeline: TimelineStageItem[] = STAGE_ORDER.map((stage) => {
       const stageCfg = snapshot.schedule[stage];
       const sentAt = snapshot.sentMap[stage];
@@ -98,6 +102,8 @@ export async function GET(request: Request) {
         status = "paused";
       } else if (todayOffDay.isOff) {
         status = "off_day";
+      } else if (isStageMissedWib(nowMinutesWib, stage, snapshot.schedule)) {
+        status = "missed";
       }
 
       return {
@@ -130,6 +136,7 @@ export async function GET(request: Request) {
       attendance: snapshot.attendance,
       timeline,
       pauseConfig: snapshot.pauseConfig,
+      cronHealth: snapshot.cronHealth,
       logs: snapshot.logs,
     };
 

@@ -122,16 +122,16 @@ Buka `http://localhost:3000`. Anda akan diarahkan ke `/login` untuk memasukkan P
    - `CRON_SECRET`: nilai yang persis sama dengan `CRON_SECRET` di Vercel Environment Variables.
 3. Buka tab **Actions** dan pastikan workflow `Daily Attendance Reminder Cron` (jadwal `0,30 * * * *`, memanggil `{"stage":"auto"}`) serta `Keep GitHub Actions Active` dalam keadaan aktif.
 
-#### Opsi B: cron-job.org (Alternatif Gratis Tanpa GitHub Actions)
-Jika Anda deploy ke Vercel tanpa GitHub atau menginginkan pemicu cron yang lebih presisi setiap 30 menit:
+#### Opsi B: cron-job.org (Direkomendasikan untuk Presisi Menit Bebas `00`–`59`)
+Jika Anda mengatur jam & menit bebas (misalnya `09:07`, `16:23`, `20:55` WIB) dan ingin email terkirim tepat pada menit tersebut tanpa menunggu antrean GitHub Actions:
 
 1. Buat akun gratis di [cron-job.org](https://cron-job.org), lalu klik **Create cronjob**.
 2. Isi konfigurasi dasar:
    - **Title:** `Pengingat Absen Smart Dispatcher`
    - **URL:** `https://<domain-vercel-anda>/api/cron/attendance`
-   - **Execution schedule:** pilih **Custom**, atur **Minutes** ke `0, 30` (setiap 30 menit sepanjang hari), Hours/Days/Months `*`.
+   - **Execution schedule:** pilih **Every 1 minute** atau **Every 5 minutes** (aman untuk kuota gratis & menjaga status scheduler dashboard tetap hijau).
 3. Buka tab **Advanced**:
-   - **Request method:** `POST`
+   - **Request method:** `POST` (endpoint juga mendukung `GET` dengan header yang sama)
    - **Headers:** tambahkan dua header berikut:
      - `Authorization`: `Bearer <CRON_SECRET_ANDA>`
      - `Content-Type`: `application/json`

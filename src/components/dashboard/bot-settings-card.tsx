@@ -484,7 +484,6 @@ export function BotSettingsCard({
                   <TimePicker24h
                     id={`settings-time-${row.stage}`}
                     value={cfg.time}
-                    stepMinutes={30}
                     disabled={!cfg.enabled || savingSchedule}
                     onChange={(nextHm) => {
                       setScheduleDraft((prev) => ({
@@ -495,7 +494,7 @@ export function BotSettingsCard({
                       if (scheduleFeedback) setScheduleFeedback(null);
                     }}
                     ariaLabel={`Jam ${row.title}`}
-                    className="w-[152px] sm:w-[144px]"
+                    className="w-[162px] sm:w-[168px]"
                   />
 
                   <button
@@ -529,8 +528,8 @@ export function BotSettingsCard({
             );
           })}
 
-          <p className="text-[11px] text-[var(--ink-muted)]">
-            Interval 30 menit mengikuti cron otomatis. Urutan wajib Pagi &lt; Sore &lt; Urgent.
+          <p className="text-[11px] leading-relaxed text-[var(--ink-muted)]">
+            Ketik langsung format 24 jam (<span className="font-mono-num">00:00</span>-<span className="font-mono-num">23:59</span> WIB) atau klik ikon jam. Untuk presisi per menit, gunakan interval cron 1-5 menit di <span className="font-semibold text-[var(--ink)]">cron-job.org</span>. Urutan wajib Pagi &lt; Sore &lt; Urgent.
           </p>
 
           {scheduleValidationError ? (

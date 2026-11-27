@@ -2,8 +2,8 @@ name: Daily Attendance Reminder Cron
 
 on:
   schedule:
-    # Smart Dispatcher setiap 30 menit (24 jam) mengikuti jam fleksibel yang diatur di dashboard
-    - cron: "0,30 * * * *"
+    # Cadangan otomatis setiap 15 menit (24 jam) mengikuti jam fleksibel di dashboard
+    - cron: "*/15 * * * *"
   workflow_dispatch:
     inputs:
       stage:

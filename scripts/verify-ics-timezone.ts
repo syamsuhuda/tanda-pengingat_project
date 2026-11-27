@@ -40,11 +40,13 @@ import {
   getTodayWibDate,
   getYesterdayWibDate,
   hmTimeToMinutes,
+  isStageMissedWib,
   isWithinAttendanceConfirmWindow,
   resolveDueAutoStage,
   resolveWibSessionUtcRange,
   shiftYmdDate,
 } from "../src/lib/timezone";
+import { scheduleConfigSchema } from "../src/lib/validators";
 
 function unfoldIcs(ics: string): string {
   return ics.replace(/\r\n[ \t]/g, "");
@@ -239,7 +241,18 @@ function runAllAssertions(): void {
   assert.equal(lateSlotCrossMidnight.dtStartUtc, "20261231T163000Z");
   assert.equal(lateSlotCrossMidnight.dtEndUtc, "20261231T170000Z");
 
-  // 11. Logika Smart Dispatcher auto (jendela 90 menit & prioritas urgent > afternoon > morning)
+  // 11. Logika Smart Dispatcher auto (menit bebas 00-59, jendela 120 menit / sebelum tahap berikutnya, & status Terlewat)
+  const freeMinuteSchedule = {
+    morning: { enabled: true, time: "09:07" },
+    afternoon: { enabled: true, time: "16:23" },
+    urgent: { enabled: true, time: "20:58" },
+  };
+  assert.equal(scheduleConfigSchema.safeParse(freeMinuteSchedule).success, true);
+  const freeMorningSlot = buildAttendanceCalendarSlot("2026-11-26", "09:07", 30);
+  assert.equal(freeMorningSlot.startTime, "09:07");
+  assert.equal(freeMorningSlot.endTime, "09:37");
+  assert.equal(freeMorningSlot.dtStartUtc, "20261126T020700Z");
+
   const testSchedule = {
     morning: { enabled: true, time: "08:30" },
     afternoon: { enabled: true, time: "15:00" },
@@ -247,10 +260,20 @@ function runAllAssertions(): void {
   };
   const noSent = { morning: null, afternoon: null, urgent: null };
 
+  assert.equal(resolveDueAutoStage(hmTimeToMinutes("09:06"), freeMinuteSchedule, noSent), null);
+  assert.equal(resolveDueAutoStage(hmTimeToMinutes("09:07"), freeMinuteSchedule, noSent), "morning");
+  assert.equal(resolveDueAutoStage(hmTimeToMinutes("09:08"), freeMinuteSchedule, noSent), "morning");
+  assert.equal(resolveDueAutoStage(hmTimeToMinutes("11:07"), freeMinuteSchedule, noSent), "morning");
+  assert.equal(resolveDueAutoStage(hmTimeToMinutes("11:08"), freeMinuteSchedule, noSent), null);
+  assert.equal(isStageMissedWib(hmTimeToMinutes("11:07"), "morning", freeMinuteSchedule), false);
+  assert.equal(isStageMissedWib(hmTimeToMinutes("11:08"), "morning", freeMinuteSchedule), true);
+
   assert.equal(resolveDueAutoStage(hmTimeToMinutes("08:29"), testSchedule, noSent), null);
   assert.equal(resolveDueAutoStage(hmTimeToMinutes("08:30"), testSchedule, noSent), "morning");
-  assert.equal(resolveDueAutoStage(hmTimeToMinutes("10:00"), testSchedule, noSent), "morning");
-  assert.equal(resolveDueAutoStage(hmTimeToMinutes("10:01"), testSchedule, noSent), null);
+  assert.equal(resolveDueAutoStage(hmTimeToMinutes("10:30"), testSchedule, noSent), "morning");
+  assert.equal(resolveDueAutoStage(hmTimeToMinutes("10:31"), testSchedule, noSent), null);
+  assert.equal(isStageMissedWib(hmTimeToMinutes("10:31"), "morning", testSchedule), true);
+  assert.equal(resolveDueAutoStage(hmTimeToMinutes("15:29"), testSchedule, noSent), "afternoon");
   assert.equal(resolveDueAutoStage(hmTimeToMinutes("15:30"), testSchedule, noSent), "urgent");
   assert.equal(
     resolveDueAutoStage(hmTimeToMinutes("15:30"), testSchedule, {
@@ -258,8 +281,9 @@ function runAllAssertions(): void {
       afternoon: null,
       urgent: "2026-11-26T15:30:00+07:00",
     }),
-    "afternoon",
+    null,
   );
+  assert.equal(isStageMissedWib(hmTimeToMinutes("15:30"), "afternoon", testSchedule), true);
   assert.equal(
     resolveDueAutoStage(
       hmTimeToMinutes("08:30"),

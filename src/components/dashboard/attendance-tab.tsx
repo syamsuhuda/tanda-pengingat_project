@@ -3,15 +3,21 @@
 import { useEffect, useState } from "react";
 import {
   AlertCircle,
+  AlertTriangle,
   Ban,
   BellOff,
   CalendarOff,
   Check,
   CheckCircle2,
   Clock,
+  Copy,
+  Pause,
   PauseCircle,
+  Play,
+  RefreshCw,
   RotateCcw,
   Send,
+  X,
 } from "lucide-react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ActivityLogsCard } from "@/components/dashboard/activity-logs-card";
@@ -45,6 +51,11 @@ const TIMELINE_META: Record<
     label: "Menunggu",
     className:
       "border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--ink-muted)]",
+  },
+  missed: {
+    label: "Terlewat",
+    className:
+      "border-[var(--danger-border)] bg-[var(--danger-bg)] text-[var(--danger-fg)]",
   },
   cancelled: {
     label: "Dibatalkan",
@@ -89,6 +100,9 @@ export function AttendanceTab({
   const [pauseNoteDirty, setPauseNoteDirty] = useState(false);
   const [savingPause, setSavingPause] = useState(false);
   const [pauseNoteExpanded, setPauseNoteExpanded] = useState(false);
+  const [checkingNow, setCheckingNow] = useState(false);
+  const [cronGuideOpen, setCronGuideOpen] = useState(false);
+  const [copiedCronUrl, setCopiedCronUrl] = useState(false);
 
   useEffect(() => {
     setPauseDraft(data.pauseConfig.paused);
@@ -96,6 +110,17 @@ export function AttendanceTab({
       setPauseNote(data.pauseConfig.note ?? "");
     }
   }, [data.pauseConfig.paused, data.pauseConfig.note, pauseNoteDirty]);
+
+  useEffect(() => {
+    if (!cronGuideOpen) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setCronGuideOpen(false);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [cronGuideOpen]);
 
   const isConfirmed = data.attendance !== null;
   const isTodayOff = data.todayOffDay.isOff;
@@ -105,6 +130,8 @@ export function AttendanceTab({
     .filter((stage) => data.schedule[stage].enabled)
     .map((stage) => formatHmTimeWibLabel(data.schedule[stage].time))
     .join(", ");
+
+  const nextWaitingStage = data.timeline.find((item) => item.status === "waiting");
 
   async function handleManualConfirmToday() {
     setConfirmingManual(true);
@@ -250,25 +277,68 @@ export function AttendanceTab({
       setPauseNoteDirty(false);
       setStatusFeedback({
         type: "success",
-        text: body.message ?? "Mode Jeda Bot diperbarui.",
+        text: nextPaused ? "Bot dijeda sementara." : "Bot diaktifkan kembali.",
       });
       await onRefresh();
     } catch {
       setPauseDraft(data.pauseConfig.paused);
       setStatusFeedback({
         type: "error",
-        text: "Koneksi gagal saat menyimpan Mode Jeda Bot.",
+        text: "Koneksi gagal saat menyimpan status bot.",
       });
     } finally {
       setSavingPause(false);
     }
   }
 
-  const heroBorderClass = isConfirmed
-    ? "border-[var(--success-border)]"
-    : isTodayOff
-      ? "border-[var(--off-border)]"
-      : "border-[var(--border-subtle)]";
+  async function handleCheckNow() {
+    setCheckingNow(true);
+    setStatusFeedback(null);
+
+    try {
+      const response = await fetch("/api/attendance/check-now", {
+        method: "POST",
+      });
+      const body = (await response.json()) as {
+        ok: boolean;
+        message?: string;
+        data?: { status?: string; scheduledTimeWib?: string };
+      };
+      if (!response.ok || !body.ok) {
+        setStatusFeedback({
+          type: "error",
+          text: body.message ?? "Gagal mengecek jadwal saat ini.",
+        });
+        return;
+      }
+
+      setStatusFeedback({
+        type: "success",
+        text: body.message ?? "Evaluasi jadwal selesai.",
+      });
+      await onRefresh();
+    } catch {
+      setStatusFeedback({
+        type: "error",
+        text: "Koneksi gagal saat menjalankan pengecekan jadwal.",
+      });
+    } finally {
+      setCheckingNow(false);
+    }
+  }
+
+  const cronEndpointUrl =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/api/cron/attendance`
+      : "https://<domain-vercel-anda>/api/cron/attendance";
+
+  const heroBorderClass = pauseDraft
+    ? "border-[var(--warning-border)]"
+    : isConfirmed
+      ? "border-[var(--success-border)]"
+      : isTodayOff
+        ? "border-[var(--off-border)]"
+        : "border-[var(--border-subtle)]";
 
   return (
     <div className="space-y-5">
@@ -297,19 +367,53 @@ export function AttendanceTab({
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
+              {pauseDraft ? (
+                <span className="inline-flex items-center gap-1.5 rounded-md border border-[var(--warning-border)] bg-[var(--warning-bg)] px-2.5 py-1 text-xs font-bold text-[var(--warning-fg)]">
+                  <PauseCircle className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden="true" />
+                  <span>Bot Dijeda</span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-md border border-[var(--success-border)] bg-[var(--success-bg)] px-2.5 py-1 text-xs font-bold text-[var(--success-fg)]">
+                  <span
+                    className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"
+                    aria-hidden="true"
+                  />
+                  <span>Bot Aktif</span>
+                </span>
+              )}
+
               <span className="font-mono-num rounded-md bg-[var(--surface-elevated)] px-2.5 py-1 text-xs font-medium text-[var(--ink-muted)]">
                 {data.todayFormatted}
               </span>
               <span className="rounded-md bg-[var(--surface-elevated)] px-2.5 py-1 text-xs font-semibold text-[var(--ink)]">
                 Untuk {data.recipient.name}
               </span>
-              {pauseDraft ? (
-                <span className="inline-flex items-center gap-1 rounded-md border border-[var(--warning-border)] bg-[var(--warning-bg)] px-2.5 py-1 text-xs font-semibold text-[var(--warning-fg)]">
-                  <PauseCircle className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-                  <span>Bot Dijeda</span>
+
+              {data.cronHealth.status === "healthy" ? (
+                <span className="inline-flex items-center gap-1 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-2.5 py-1 text-[11px] font-medium text-[var(--ink-muted)]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+                  <span>
+                    Scheduler aktif ·{" "}
+                    {data.cronHealth.minutesSinceLastPing === 0
+                      ? "baru saja"
+                      : `${data.cronHealth.minutesSinceLastPing} mnt lalu`}
+                  </span>
                 </span>
               ) : null}
             </div>
+
+            {pauseDraft ? (
+              <p className="text-xs font-medium text-[var(--warning-fg)]">
+                Pengiriman otomatis sedang dihentikan sementara
+                {data.pauseConfig.note ? ` (${data.pauseConfig.note})` : ""}.
+              </p>
+            ) : !isConfirmed && !isTodayOff ? (
+              <p className="text-xs text-[var(--ink-muted)]">
+                {nextWaitingStage
+                  ? `Jadwal berikutnya: ${nextWaitingStage.scheduledTimeWib}`
+                  : "Semua jadwal aktif hari ini sudah melewati waktu kirim."}
+              </p>
+            ) : null}
 
             <div className="flex items-center gap-3.5 pt-1">
               {isConfirmed ? (
@@ -389,6 +493,8 @@ export function AttendanceTab({
                   >
                     {item.status === "sent" ? (
                       <Check className="h-3 w-3" strokeWidth={2.2} aria-hidden="true" />
+                    ) : item.status === "missed" ? (
+                      <AlertTriangle className="h-3 w-3" strokeWidth={2.2} aria-hidden="true" />
                     ) : item.status === "paused" ? (
                       <PauseCircle className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
                     ) : item.status === "off_day" ? (
@@ -407,6 +513,52 @@ export function AttendanceTab({
             })}
           </div>
         </div>
+
+        {data.cronHealth.status !== "healthy" ? (
+          <div
+            role="status"
+            className="mt-4 flex flex-col gap-3 rounded-xl border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3.5 py-3 text-xs text-[var(--warning-fg)] sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
+              <div>
+                <p className="font-bold">
+                  {data.cronHealth.status === "never"
+                    ? "Scheduler otomatis belum memanggil server"
+                    : `Scheduler terakhir aktif ${data.cronHealth.minutesSinceLastPing} menit lalu`}
+                </p>
+                <p className="mt-0.5 leading-relaxed opacity-90">
+                  {data.cronHealth.status === "never"
+                    ? "Email terjadwal tidak bisa terkirim otomatis sebelum cron eksternal (cron-job.org / GitHub Actions) memanggil endpoint server."
+                    : "Panggilan cron lebih dari 35 menit yang lalu. Pastikan cron eksternal berjalan normal."}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                type="button"
+                disabled={checkingNow}
+                onClick={() => void handleCheckNow()}
+                className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-3 text-xs font-bold text-[var(--ink)] transition-colors hover:bg-[var(--surface-elevated)] active:scale-[0.98] disabled:opacity-50"
+              >
+                <RefreshCw
+                  className={`h-3.5 w-3.5 ${checkingNow ? "animate-spin" : ""}`}
+                  strokeWidth={2}
+                  aria-hidden="true"
+                />
+                <span>{checkingNow ? "Mengecek..." : "Cek Sekarang"}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCronGuideOpen(true)}
+                className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[var(--ink)] px-3 text-xs font-bold text-[var(--bg)] transition-opacity hover:opacity-90 active:scale-[0.98]"
+              >
+                Cara Hubungkan Cron
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         {statusFeedback ? (
           <div
@@ -496,34 +648,41 @@ export function AttendanceTab({
             </button>
           </div>
 
-          <div className="flex w-full items-center justify-between gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] py-1.5 pr-2 pl-3 sm:ml-auto sm:w-auto">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
+            {pauseDraft ? (
+              <button
+                type="button"
+                disabled={savingPause}
+                onClick={() => {
+                  setPauseDraft(false);
+                  void savePauseConfig(false, pauseNote);
+                }}
+                className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 text-xs font-bold text-white transition-colors hover:bg-emerald-700 active:scale-[0.98] disabled:opacity-50 sm:flex-none"
+              >
+                <Play className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden="true" />
+                <span>{savingPause ? "Mengaktifkan..." : "Aktifkan Bot"}</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={savingPause}
+                onClick={() => {
+                  setPauseDraft(true);
+                  void savePauseConfig(true, pauseNote);
+                }}
+                className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl border border-[var(--warning-border)] bg-[var(--warning-bg)] px-4 text-xs font-bold text-[var(--warning-fg)] transition-opacity hover:opacity-90 active:scale-[0.98] disabled:opacity-50 sm:flex-none"
+              >
+                <Pause className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden="true" />
+                <span>{savingPause ? "Menjeda..." : "Jeda Bot"}</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => setPauseNoteExpanded((prev) => !prev)}
-              className="text-xs font-semibold text-[var(--ink)] hover:underline"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3 text-xs font-semibold text-[var(--ink)] hover:bg-[var(--surface-muted)]"
             >
-              Mode Jeda Bot
-            </button>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={pauseDraft}
-              aria-label="Aktifkan atau matikan Mode Jeda Bot"
-              disabled={savingPause}
-              onClick={() => {
-                const next = !pauseDraft;
-                setPauseDraft(next);
-                void savePauseConfig(next, pauseNote);
-              }}
-              className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors disabled:opacity-50 ${pauseDraft
-                  ? "border-transparent bg-amber-500"
-                  : "border-[var(--border-control)] bg-[var(--surface)]"
-                }`}
-            >
-              <span
-                className={`inline-block h-5 w-5 rounded-full bg-white shadow-xs transition-transform ${pauseDraft ? "translate-x-6" : "translate-x-1"
-                  }`}
-              />
+              {pauseNoteExpanded || pauseDraft ? "Tutup Catatan" : "Catatan Jeda"}
             </button>
           </div>
         </div>
@@ -628,6 +787,92 @@ export function AttendanceTab({
           setClearSentLocks(false);
         }}
       />
+
+      {cronGuideOpen ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="cron-guide-title"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              setCronGuideOpen(false);
+            }
+          }}
+        >
+          <div className="w-full max-w-lg rounded-t-2xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-lg sm:rounded-2xl sm:p-6">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 id="cron-guide-title" className="font-display text-lg font-bold text-[var(--ink)]">
+                  Hubungkan Scheduler Otomatis
+                </h2>
+                <p className="mt-0.5 text-xs text-[var(--ink-muted)]">
+                  Pilih <strong>cron-job.org</strong> (presisi 1-5 menit) atau <strong>GitHub Actions</strong>.
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Tutup panduan cron"
+                onClick={() => setCronGuideOpen(false)}
+                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] text-[var(--ink-muted)] hover:text-[var(--ink)]"
+              >
+                <X className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3 text-xs leading-relaxed text-[var(--ink)]">
+              <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-3">
+                <p className="font-semibold text-[var(--ink)]">1. Endpoint Cron Server</p>
+                <div className="mt-1.5 flex items-center gap-2">
+                  <code className="font-mono-num min-w-0 flex-1 overflow-x-auto rounded-lg border border-[var(--border-subtle)] bg-[var(--surface)] px-2.5 py-2 text-[11px] text-[var(--ink)]">
+                    {cronEndpointUrl}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void navigator.clipboard?.writeText(cronEndpointUrl);
+                      setCopiedCronUrl(true);
+                      setTimeout(() => setCopiedCronUrl(false), 2000);
+                    }}
+                    className="inline-flex min-h-[40px] shrink-0 items-center gap-1 rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-2.5 text-xs font-semibold text-[var(--ink)] hover:bg-[var(--surface-muted)]"
+                  >
+                    <Copy className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                    <span>{copiedCronUrl ? "Tersalin" : "Salin"}</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-3 space-y-1.5">
+                <p className="font-semibold text-[var(--ink)]">2. Pengaturan di cron-job.org (Gratis, 1-5 Menit)</p>
+                <p className="text-[var(--ink-muted)]">
+                  Method: <code className="font-mono-num text-[var(--ink)]">POST</code> (atau <code className="font-mono-num text-[var(--ink)]">GET</code>) · Interval: <strong>Every 1 minute</strong> / <strong>5 minutes</strong>
+                </p>
+                <p className="text-[var(--ink-muted)]">
+                  Header: <code className="font-mono-num text-[var(--ink)]">Authorization: Bearer &lt;CRON_SECRET_VERCEL&gt;</code>
+                </p>
+                <p className="text-[var(--ink-muted)]">
+                  Body JSON (untuk POST): <code className="font-mono-num text-[var(--ink)]">{`{"stage":"auto"}`}</code>
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-3 space-y-1">
+                <p className="font-semibold text-[var(--ink)]">3. Alternatif GitHub Actions</p>
+                <p className="text-[var(--ink-muted)]">
+                  Isi Repository Secrets <strong>APP_URL</strong> &amp; <strong>CRON_SECRET</strong> di GitHub, lalu aktifkan workflow <em>Daily Attendance Reminder Cron</em>.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setCronGuideOpen(false)}
+              className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-[var(--ink)] text-xs font-bold text-[var(--bg)] hover:opacity-90"
+            >
+              Tutup
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

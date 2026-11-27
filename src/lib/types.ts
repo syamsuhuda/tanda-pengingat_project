@@ -116,7 +116,14 @@ export interface ActivityLogEntry {
   result: ActivityLogResult;
 }
 
-export type TimelineStageStatus = "sent" | "waiting" | "cancelled" | "paused" | "off_day" | "disabled";
+export type TimelineStageStatus =
+  | "sent"
+  | "waiting"
+  | "missed"
+  | "cancelled"
+  | "paused"
+  | "off_day"
+  | "disabled";
 
 export interface TimelineStageItem {
   stage: AttendanceStage;
@@ -124,6 +131,26 @@ export interface TimelineStageItem {
   scheduledTimeWib: string;
   status: TimelineStageStatus;
   sentAt: string | null;
+}
+
+export interface CronPingRecord {
+  timestamp: string;
+  wibTime: string;
+  status: string;
+  stageTriggered?: string | null;
+  source?: string | null;
+}
+
+export type CronHealthStatus = "healthy" | "delayed" | "never";
+
+export interface CronHealthSummary {
+  status: CronHealthStatus;
+  lastPingAt: string | null;
+  lastPingWib: string | null;
+  lastStatus: string | null;
+  stageTriggered: string | null;
+  source: string | null;
+  minutesSinceLastPing: number | null;
 }
 
 export interface DashboardStatusData {
@@ -147,6 +174,7 @@ export interface DashboardStatusData {
   attendance: AttendanceStatusRecord | null;
   timeline: TimelineStageItem[];
   pauseConfig: BotPauseConfig;
+  cronHealth: CronHealthSummary;
   logs: ActivityLogEntry[];
 }
 

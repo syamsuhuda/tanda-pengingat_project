@@ -167,15 +167,45 @@ export function formatHmTimeWibLabel(hm: string): string {
   return `${hm} WIB`;
 }
 
-export const AUTO_DISPATCH_WINDOW_MINUTES = 90;
+export const AUTO_DISPATCH_WINDOW_MINUTES = 120;
+
+const STAGE_SEQUENCE: Array<"morning" | "afternoon" | "urgent"> = [
+  "morning",
+  "afternoon",
+  "urgent",
+];
+
+type ScheduleLike = {
+  morning: { enabled: boolean; time: string };
+  afternoon: { enabled: boolean; time: string };
+  urgent: { enabled: boolean; time: string };
+};
+
+export function resolveStageDispatchWindowEndMinutes(
+  stage: "morning" | "afternoon" | "urgent",
+  schedule: ScheduleLike,
+): number {
+  const stageMinutes = hmTimeToMinutes(schedule[stage].time);
+  let windowEnd = Math.min(stageMinutes + AUTO_DISPATCH_WINDOW_MINUTES, 24 * 60 - 1);
+
+  const stageIdx = STAGE_SEQUENCE.indexOf(stage);
+  for (let i = stageIdx + 1; i < STAGE_SEQUENCE.length; i += 1) {
+    const nextStage = STAGE_SEQUENCE[i];
+    if (nextStage && schedule[nextStage].enabled) {
+      const nextMinutes = hmTimeToMinutes(schedule[nextStage].time);
+      if (nextMinutes > stageMinutes) {
+        windowEnd = Math.min(windowEnd, nextMinutes - 1);
+      }
+      break;
+    }
+  }
+
+  return windowEnd;
+}
 
 export function resolveDueAutoStage(
   nowMinutes: number,
-  schedule: {
-    morning: { enabled: boolean; time: string };
-    afternoon: { enabled: boolean; time: string };
-    urgent: { enabled: boolean; time: string };
-  },
+  schedule: ScheduleLike,
   sentMap: Record<"morning" | "afternoon" | "urgent", string | null>,
 ): "morning" | "afternoon" | "urgent" | null {
   const priorityOrder: Array<"urgent" | "afternoon" | "morning"> = [
@@ -191,15 +221,25 @@ export function resolveDueAutoStage(
     }
 
     const stageMinutes = hmTimeToMinutes(stageConfig.time);
-    if (
-      nowMinutes >= stageMinutes &&
-      nowMinutes <= stageMinutes + AUTO_DISPATCH_WINDOW_MINUTES
-    ) {
+    const windowEnd = resolveStageDispatchWindowEndMinutes(stage, schedule);
+    if (nowMinutes >= stageMinutes && nowMinutes <= windowEnd) {
       return stage;
     }
   }
 
   return null;
+}
+
+export function isStageMissedWib(
+  nowMinutes: number,
+  stage: "morning" | "afternoon" | "urgent",
+  schedule: ScheduleLike,
+): boolean {
+  if (!schedule[stage].enabled) {
+    return false;
+  }
+  const windowEnd = resolveStageDispatchWindowEndMinutes(stage, schedule);
+  return nowMinutes > windowEnd;
 }
 
 export function shiftYmdDate(ymd: string, deltaDays: number): string {
