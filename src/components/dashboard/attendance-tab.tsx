@@ -375,7 +375,7 @@ export function AttendanceTab({
         className={`rounded-2xl border bg-[var(--surface)] p-5 shadow-xs sm:p-6 ${heroBorderClass}`}
       >
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-          <div className="space-y-2">
+          <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
               {pauseDraft ? (
                 <span className="inline-flex items-center gap-1.5 rounded-md border border-[var(--warning-border)] bg-[var(--warning-bg)] px-2.5 py-1 text-xs font-bold text-[var(--warning-fg)]">
@@ -398,35 +398,9 @@ export function AttendanceTab({
               <span className="rounded-md bg-[var(--surface-elevated)] px-2.5 py-1 text-xs font-semibold text-[var(--ink)]">
                 Untuk {data.recipient.name}
               </span>
-
-              {data.cronHealth.status === "healthy" ? (
-                <span className="inline-flex items-center gap-1 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-2.5 py-1 text-[11px] font-medium text-[var(--ink-muted)]">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
-                  <span>
-                    Scheduler aktif
-                    {data.cronHealth.source ? ` (${data.cronHealth.source})` : ""} ·{" "}
-                    {data.cronHealth.minutesSinceLastPing === 0
-                      ? "baru saja"
-                      : `${data.cronHealth.minutesSinceLastPing} mnt lalu`}
-                  </span>
-                </span>
-              ) : null}
             </div>
 
-            {pauseDraft ? (
-              <p className="text-xs font-medium text-[var(--warning-fg)]">
-                Pengiriman otomatis sedang dihentikan sementara
-                {data.pauseConfig.note ? ` (${data.pauseConfig.note})` : ""}.
-              </p>
-            ) : !isConfirmed && !isTodayOff ? (
-              <p className="text-xs text-[var(--ink-muted)]">
-                {nextWaitingStage
-                  ? `Jadwal berikutnya: ${nextWaitingStage.scheduledTimeWib}`
-                  : "Semua jadwal aktif hari ini sudah melewati waktu kirim."}
-              </p>
-            ) : null}
-
-            <div className="flex items-center gap-3.5 pt-1">
+            <div className="flex items-center gap-3.5 pt-0.5">
               {isConfirmed ? (
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--success-bg)] text-[var(--success-fg)]">
                   <CheckCircle2 className="h-6 w-6" strokeWidth={2} aria-hidden="true" />
@@ -465,63 +439,98 @@ export function AttendanceTab({
                     <>
                       Pengingat otomatis off hari ini{data.todayOffDay.note ? ` (${data.todayOffDay.note})` : ""}.
                     </>
-                  ) : (
+                  ) : pauseDraft ? (
                     <>
-                      Jadwal aktif:{" "}
-                      <span className="font-mono-num font-medium text-[var(--ink)]">
-                        {activeStageTimesText || "tidak ada"}
-                      </span>
+                      Pengiriman otomatis dijeda sementara{data.pauseConfig.note ? ` (${data.pauseConfig.note})` : ""}.
                     </>
+                  ) : (
+                    "Menunggu konfirmasi absen hari ini."
                   )}
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:w-[460px]">
-            {data.timeline.map((item) => {
-              const badge = TIMELINE_META[item.status];
-              return (
-                <div
-                  key={item.stage}
-                  className="flex items-center justify-between gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3.5 py-2.5 sm:flex-col sm:items-start sm:gap-1.5"
-                >
-                  <div>
-                    <p className="font-mono-num text-xs font-bold text-[var(--ink)]">
-                      {item.scheduledTimeWib}
-                    </p>
-                    <p className="text-[11px] text-[var(--ink-muted)]">
-                      {item.stage === "morning"
-                        ? "Pagi + Kalender"
-                        : item.stage === "afternoon"
-                          ? "Cek Sore"
-                          : "Urgent + Alert"}
-                    </p>
-                  </div>
-
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold ${badge.className}`}
-                  >
-                    {item.status === "sent" ? (
-                      <Check className="h-3 w-3" strokeWidth={2.2} aria-hidden="true" />
-                    ) : item.status === "missed" ? (
-                      <AlertTriangle className="h-3 w-3" strokeWidth={2.2} aria-hidden="true" />
-                    ) : item.status === "paused" ? (
-                      <PauseCircle className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
-                    ) : item.status === "off_day" ? (
-                      <CalendarOff className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
-                    ) : item.status === "disabled" ? (
-                      <BellOff className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
-                    ) : item.status === "cancelled" ? (
-                      <Ban className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
-                    ) : (
-                      <Clock className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
-                    )}
-                    <span>{badge.label}</span>
+          <div className="space-y-2 lg:w-[460px]">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[11px] font-semibold text-[var(--ink-muted)]">
+                Rangkaian Pengingat Hari Ini
+              </span>
+              {!isConfirmed && !isTodayOff && !pauseDraft ? (
+                nextWaitingStage ? (
+                  <span className="font-mono-num inline-flex items-center gap-1.5 rounded-md border border-[var(--off-border)] bg-[var(--accent-tint)] px-2 py-0.5 text-[11px] font-bold text-[var(--accent)]">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)]" aria-hidden="true" />
+                    <span>Berikutnya: {nextWaitingStage.scheduledTimeWib}</span>
                   </span>
-                </div>
-              );
-            })}
+                ) : (
+                  <span className="rounded-md bg-[var(--surface-elevated)] px-2 py-0.5 text-[11px] font-medium text-[var(--ink-muted)]">
+                    Semua jadwal hari ini selesai
+                  </span>
+                )
+              ) : null}
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              {data.timeline.map((item) => {
+                const badge = TIMELINE_META[item.status];
+                const isNextStage =
+                  !isConfirmed &&
+                  !isTodayOff &&
+                  !pauseDraft &&
+                  nextWaitingStage?.stage === item.stage;
+
+                return (
+                  <div
+                    key={item.stage}
+                    className={`flex items-center justify-between gap-2 rounded-xl border px-3.5 py-2.5 sm:flex-col sm:items-start sm:gap-1.5 ${
+                      isNextStage
+                        ? "border-[var(--accent)]/60 bg-[var(--accent-tint)]/45"
+                        : "border-[var(--border-subtle)] bg-[var(--surface-elevated)]"
+                    }`}
+                  >
+                    <div>
+                      <p className="font-mono-num flex items-center gap-1.5 text-xs font-bold text-[var(--ink)]">
+                        {isNextStage ? (
+                          <span
+                            className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--accent)]"
+                            aria-hidden="true"
+                          />
+                        ) : null}
+                        <span>{item.scheduledTimeWib}</span>
+                      </p>
+                      <p className="text-[11px] text-[var(--ink-muted)]">
+                        {item.stage === "morning"
+                          ? "Pagi + Kalender"
+                          : item.stage === "afternoon"
+                            ? "Cek Siang / Sore"
+                            : "Urgent + Alert"}
+                      </p>
+                    </div>
+
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold ${badge.className}`}
+                    >
+                      {item.status === "sent" ? (
+                        <Check className="h-3 w-3" strokeWidth={2.2} aria-hidden="true" />
+                      ) : item.status === "missed" ? (
+                        <AlertTriangle className="h-3 w-3" strokeWidth={2.2} aria-hidden="true" />
+                      ) : item.status === "paused" ? (
+                        <PauseCircle className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
+                      ) : item.status === "off_day" ? (
+                        <CalendarOff className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
+                      ) : item.status === "disabled" ? (
+                        <BellOff className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
+                      ) : item.status === "cancelled" ? (
+                        <Ban className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
+                      ) : (
+                        <Clock className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
+                      )}
+                      <span>{badge.label}</span>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -748,6 +757,10 @@ export function AttendanceTab({
             recipient={data.recipient}
             senderName={data.senderName}
             schedule={data.schedule}
+            cronHealth={data.cronHealth}
+            checkingNow={checkingNow}
+            onCheckNow={handleCheckNow}
+            onOpenCronGuide={() => setCronGuideOpen(true)}
             onRecipientUpdated={onRecipientUpdated}
             onConfigChanged={onRefresh}
           />

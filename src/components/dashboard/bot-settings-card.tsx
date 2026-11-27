@@ -6,6 +6,7 @@ import {
   Check,
   Clock,
   Mail,
+  RefreshCw,
   UserRound,
 } from "lucide-react";
 import { TimePicker24h } from "@/components/ui/time-picker-24h";
@@ -14,12 +15,17 @@ import type {
   ActiveRecipientConfig,
   AttendanceScheduleConfig,
   AttendanceStage,
+  CronHealthSummary,
 } from "@/lib/types";
 
 interface BotSettingsCardProps {
   recipient: ActiveRecipientConfig;
   senderName: string;
   schedule: AttendanceScheduleConfig;
+  cronHealth?: CronHealthSummary;
+  checkingNow?: boolean;
+  onCheckNow?: () => Promise<void>;
+  onOpenCronGuide?: () => void;
   onRecipientUpdated: (next: ActiveRecipientConfig) => Promise<void>;
   onConfigChanged: () => Promise<void>;
 }
@@ -62,6 +68,10 @@ export function BotSettingsCard({
   recipient,
   senderName,
   schedule,
+  cronHealth,
+  checkingNow = false,
+  onCheckNow,
+  onOpenCronGuide,
   onRecipientUpdated,
   onConfigChanged,
 }: BotSettingsCardProps) {
@@ -564,6 +574,61 @@ export function BotSettingsCard({
             {savingSchedule ? "Menyimpan..." : "Simpan Jadwal"}
           </button>
         </form>
+      ) : null}
+
+      {cronHealth ? (
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border-subtle)] pt-3.5 text-[11px]">
+          <div className="flex min-w-0 items-center gap-1.5 text-[var(--ink-muted)]">
+            <span
+              className={`h-2 w-2 shrink-0 rounded-full ${
+                cronHealth.status === "healthy"
+                  ? "bg-emerald-500"
+                  : cronHealth.status === "delayed"
+                    ? "bg-amber-400"
+                    : "bg-slate-400"
+              }`}
+              aria-hidden="true"
+            />
+            <span className="truncate">
+              {cronHealth.status === "healthy"
+                ? `Scheduler aktif${cronHealth.source ? ` · ${cronHealth.source}` : ""} · ${
+                    cronHealth.minutesSinceLastPing === 0
+                      ? "baru saja"
+                      : `${cronHealth.minutesSinceLastPing} mnt lalu`
+                  }`
+                : cronHealth.status === "delayed"
+                  ? `Scheduler tertunda (${cronHealth.minutesSinceLastPing} mnt lalu)`
+                  : "Scheduler belum terhubung"}
+            </span>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-1.5">
+            {onCheckNow ? (
+              <button
+                type="button"
+                disabled={checkingNow}
+                onClick={() => void onCheckNow()}
+                className="inline-flex min-h-[34px] items-center gap-1 rounded-lg border border-[var(--border-control)] bg-[var(--surface-elevated)] px-2.5 text-[11px] font-semibold text-[var(--ink)] hover:bg-[var(--surface-muted)] disabled:opacity-50"
+              >
+                <RefreshCw
+                  className={`h-3 w-3 ${checkingNow ? "animate-spin" : ""}`}
+                  strokeWidth={2}
+                  aria-hidden="true"
+                />
+                <span>{checkingNow ? "Mengecek..." : "Cek"}</span>
+              </button>
+            ) : null}
+            {onOpenCronGuide ? (
+              <button
+                type="button"
+                onClick={onOpenCronGuide}
+                className="inline-flex min-h-[34px] items-center rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-2.5 text-[11px] font-semibold text-[var(--ink-muted)] hover:text-[var(--ink)]"
+              >
+                Panduan Cron
+              </button>
+            ) : null}
+          </div>
+        </div>
       ) : null}
     </section>
   );

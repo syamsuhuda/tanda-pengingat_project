@@ -28,8 +28,8 @@ function getLogCategory(type: ActivityLogType): "attendance" | "dispatch" | "sys
 
 const DOT_COLOR_BY_CAT = {
   attendance: "bg-emerald-400",
-  dispatch: "bg-orange-400",
-  system: "bg-sky-400",
+  dispatch: "bg-sky-400",
+  system: "bg-slate-400",
 } as const;
 
 const RESULT_BADGE: Record<

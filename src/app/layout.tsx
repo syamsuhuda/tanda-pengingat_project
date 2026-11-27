@@ -13,7 +13,7 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-// Terapkan class `dark` secara default sebelum body dirender agar tidak pernah ada kedipan putih (FOUC).
+// Terapkan tema tersimpan sebelum body dirender (default Dark Mode) tanpa menimpa pilihan Light Mode saat hydration.
 const THEME_INIT_SCRIPT = `
 (function() {
   try {
@@ -21,11 +21,18 @@ const THEME_INIT_SCRIPT = `
     var root = document.documentElement;
     if (saved === "light") {
       root.classList.remove("dark");
+      root.dataset.theme = "light";
+      root.style.colorScheme = "light";
     } else {
       root.classList.add("dark");
+      root.dataset.theme = "dark";
+      root.style.colorScheme = "dark";
     }
   } catch (e) {
-    document.documentElement.classList.add("dark");
+    var root = document.documentElement;
+    root.classList.add("dark");
+    root.dataset.theme = "dark";
+    root.style.colorScheme = "dark";
   }
 })();
 `;
@@ -36,7 +43,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="id" className="dark" suppressHydrationWarning>
+    <html lang="id" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
