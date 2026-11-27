@@ -38,6 +38,7 @@ import {
   formatIsoToWibTime,
   getNowWibTimeLabel,
   getTodayWibDate,
+  getWibDayPeriod,
   getYesterdayWibDate,
   hmTimeToMinutes,
   isStageMissedWib,
@@ -204,19 +205,44 @@ function runAllAssertions(): void {
   assert.ok(gcalUrl.includes("dates=20261126T020000Z%2F20261126T023000Z"));
   assert.ok(gcalUrl.includes("ctz=Asia%2FJakarta"));
 
-  // 9. Personalisasi nama penerima & proteksi XSS pesan khusus di template email
+  // 9. Personalisasi nama penerima, sapaan waktu dinamis WIB, palet Biru Langit, nol klise AI, & proteksi XSS
+  assert.equal(getWibDayPeriod("08:30"), "pagi");
+  assert.equal(getWibDayPeriod("12:35"), "siang");
+  assert.equal(getWibDayPeriod("16:00"), "sore");
+  assert.equal(getWibDayPeriod("20:30"), "malam");
+
   const personalizedEmail = buildAttendanceReminderEmail({
     stage: "morning",
     dateWib: "2026-11-26",
     recipientName: "Nadia",
-    senderName: "Pengingat Jadwal",
+    senderName: "Syamsu",
     confirmUrl: "https://example.com/confirm?date=2026-11-26&token=abc",
     customMessage: "Semangat jaga pagi <script>alert(1)</script>\nJangan lupa sarapan!",
   });
-  assert.ok(personalizedEmail.html.includes("Pagi, Nadia!"));
+  assert.ok(personalizedEmail.html.includes("Pagi Nadia, jangan lupa absen ya"));
+  assert.ok(personalizedEmail.html.includes("Pesan dari Syamsu"));
+  assert.ok(personalizedEmail.html.includes("Aku Udah Absen"));
+  assert.ok(personalizedEmail.html.includes("#38BDF8"));
+  assert.ok(personalizedEmail.html.includes("#0284C7"));
+  assert.ok(personalizedEmail.html.includes("#F0F9FF"));
   assert.ok(personalizedEmail.html.includes("&lt;script&gt;alert(1)&lt;/script&gt;"));
   assert.equal(personalizedEmail.html.includes("<script>alert(1)</script>"), false);
   assert.ok(personalizedEmail.text.includes("Semangat jaga pagi"));
+
+  const siangEmail = buildAttendanceReminderEmail({
+    stage: "afternoon",
+    dateWib: "2026-11-26",
+    recipientName: "Nadia",
+    senderName: "Syamsu",
+    confirmUrl: "https://example.com/confirm?date=2026-11-26&token=abc",
+    scheduledTimeWib: "12:35 WIB",
+  });
+  assert.ok(siangEmail.subject.includes("Siang Nadia, udah sempet absen belum?"));
+  assert.ok(siangEmail.html.includes("Cek Siang · 12:35 WIB"));
+  assert.equal(siangEmail.html.includes("Knock knock"), false);
+  assert.equal(siangEmail.html.includes("Yeay"), false);
+  assert.equal(siangEmail.html.includes("Dikirim hangat"), false);
+  assert.equal(siangEmail.html.includes("—"), false);
 
   const escalationEmail = buildEscalationEmail({
     dateWib: "2026-11-26",

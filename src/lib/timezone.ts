@@ -100,6 +100,17 @@ export function getNowWibTimeLabel(now: Date = new Date()): string {
   return `${pad2(p.hour)}:${pad2(p.minute)} WIB`;
 }
 
+export type WibDayPeriod = "pagi" | "siang" | "sore" | "malam";
+
+export function getWibDayPeriod(timeHHmmOrLabel: string): WibDayPeriod {
+  const match = /^([01]\d|2[0-3]):([0-5]\d)/.exec(timeHHmmOrLabel.trim());
+  const hour = match && match[1] ? Number(match[1]) : getWibDateParts().hour;
+  if (hour < 11) return "pagi";
+  if (hour < 15) return "siang";
+  if (hour < 18) return "sore";
+  return "malam";
+}
+
 export function isValidYmdDate(ymd: string): boolean {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
   if (!match) {

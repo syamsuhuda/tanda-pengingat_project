@@ -6,10 +6,8 @@ import {
   Check,
   Clock,
   Mail,
-  ShieldCheck,
   UserRound,
 } from "lucide-react";
-import { StepUpPinFlow } from "@/components/ui/step-up-pin-flow";
 import { TimePicker24h } from "@/components/ui/time-picker-24h";
 import { hmTimeToMinutes } from "@/lib/timezone";
 import type {
@@ -26,11 +24,11 @@ interface BotSettingsCardProps {
   onConfigChanged: () => Promise<void>;
 }
 
-type SettingsSubTab = "recipient" | "schedule" | "security";
+type SettingsSubTab = "recipient" | "schedule";
 
 const STAGE_ROWS: Array<{ stage: AttendanceStage; title: string }> = [
   { stage: "morning", title: "Pagi + Kalender" },
-  { stage: "afternoon", title: "Cek Sore" },
+  { stage: "afternoon", title: "Cek Siang / Sore" },
   { stage: "urgent", title: "Urgent + Eskalasi" },
 ];
 
@@ -269,14 +267,14 @@ export function BotSettingsCard({
         <div
           role="tablist"
           aria-label="Sub-tab pengaturan bot"
-          className="grid w-full grid-cols-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-1 sm:w-auto"
+          className="grid w-full grid-cols-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-1 sm:w-auto"
         >
           <button
             type="button"
             role="tab"
             aria-selected={subTab === "recipient"}
             onClick={() => setSubTab("recipient")}
-            className={`inline-flex min-h-[44px] items-center justify-center gap-1 rounded-lg px-1.5 text-[11px] font-semibold transition-colors sm:min-h-[36px] sm:gap-1.5 sm:px-2.5 sm:text-xs ${
+            className={`inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition-colors sm:min-h-[36px] sm:px-3 ${
               subTab === "recipient"
                 ? "bg-[var(--surface)] text-[var(--ink)] shadow-xs"
                 : "text-[var(--ink-muted)] hover:text-[var(--ink)]"
@@ -291,7 +289,7 @@ export function BotSettingsCard({
             role="tab"
             aria-selected={subTab === "schedule"}
             onClick={() => setSubTab("schedule")}
-            className={`inline-flex min-h-[44px] items-center justify-center gap-1 rounded-lg px-1.5 text-[11px] font-semibold transition-colors sm:min-h-[36px] sm:gap-1.5 sm:px-2.5 sm:text-xs ${
+            className={`inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition-colors sm:min-h-[36px] sm:px-3 ${
               subTab === "schedule"
                 ? "bg-[var(--surface)] text-[var(--ink)] shadow-xs"
                 : "text-[var(--ink-muted)] hover:text-[var(--ink)]"
@@ -299,21 +297,6 @@ export function BotSettingsCard({
           >
             <Clock className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />
             <span className="truncate">Jam Kirim</span>
-          </button>
-
-          <button
-            type="button"
-            role="tab"
-            aria-selected={subTab === "security"}
-            onClick={() => setSubTab("security")}
-            className={`inline-flex min-h-[44px] items-center justify-center gap-1 rounded-lg px-1.5 text-[11px] font-semibold transition-colors sm:min-h-[36px] sm:gap-1.5 sm:px-2.5 sm:text-xs ${
-              subTab === "security"
-                ? "bg-[var(--surface)] text-[var(--ink)] shadow-xs"
-                : "text-[var(--ink-muted)] hover:text-[var(--ink)]"
-            }`}
-          >
-            <ShieldCheck className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />
-            <span className="truncate">Keamanan</span>
           </button>
         </div>
       </div>
@@ -467,35 +450,27 @@ export function BotSettingsCard({
             return (
               <div
                 key={row.stage}
-                className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3.5 py-2.5 transition-colors ${
+                className={`flex flex-col gap-2.5 rounded-xl border p-3.5 transition-colors ${
                   cfg.enabled
                     ? "border-[var(--border-subtle)] bg-[var(--surface-elevated)]"
-                    : "border-[var(--border-subtle)] bg-[var(--surface-muted)] opacity-75"
+                    : "border-[var(--border-subtle)] bg-[var(--surface-muted)] opacity-80"
                 }`}
               >
-                <span className="text-xs font-semibold text-[var(--ink)] sm:text-sm">
-                  {row.title}
-                </span>
-
-                <div className="flex shrink-0 items-center gap-2">
-                  <label htmlFor={`settings-time-${row.stage}`} className="sr-only">
-                    Jam WIB untuk {row.title}
-                  </label>
-                  <TimePicker24h
-                    id={`settings-time-${row.stage}`}
-                    value={cfg.time}
-                    disabled={!cfg.enabled || savingSchedule}
-                    onChange={(nextHm) => {
-                      setScheduleDraft((prev) => ({
-                        ...prev,
-                        [row.stage]: { ...prev[row.stage], time: nextHm },
-                      }));
-                      setScheduleDirty(true);
-                      if (scheduleFeedback) setScheduleFeedback(null);
-                    }}
-                    ariaLabel={`Jam ${row.title}`}
-                    className="w-[162px] sm:w-[168px]"
-                  />
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-xs font-semibold text-[var(--ink)] sm:text-sm">
+                      {row.title}
+                    </span>
+                    <span
+                      className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
+                        cfg.enabled
+                          ? "bg-[var(--success-bg)] text-[var(--success-fg)]"
+                          : "bg-[var(--surface)] text-[var(--ink-muted)]"
+                      }`}
+                    >
+                      {cfg.enabled ? "Aktif" : "Nonaktif"}
+                    </span>
+                  </div>
 
                   <button
                     type="button"
@@ -523,6 +498,27 @@ export function BotSettingsCard({
                       }`}
                     />
                   </button>
+                </div>
+
+                <div className="w-full min-w-0">
+                  <label htmlFor={`settings-time-${row.stage}`} className="sr-only">
+                    Jam WIB untuk {row.title}
+                  </label>
+                  <TimePicker24h
+                    id={`settings-time-${row.stage}`}
+                    value={cfg.time}
+                    disabled={!cfg.enabled || savingSchedule}
+                    onChange={(nextHm) => {
+                      setScheduleDraft((prev) => ({
+                        ...prev,
+                        [row.stage]: { ...prev[row.stage], time: nextHm },
+                      }));
+                      setScheduleDirty(true);
+                      if (scheduleFeedback) setScheduleFeedback(null);
+                    }}
+                    ariaLabel={`Jam ${row.title}`}
+                    className="w-full min-w-0"
+                  />
                 </div>
               </div>
             );
@@ -569,27 +565,6 @@ export function BotSettingsCard({
           </button>
         </form>
       ) : null}
-
-      <div
-        hidden={subTab !== "security"}
-        className={subTab === "security" ? "mt-4 space-y-3.5" : "hidden"}
-      >
-        <div>
-          <h3 className="text-xs font-bold text-[var(--ink)]">
-            Ubah PIN Akses (Verifikasi Bertahap)
-          </h3>
-          <p className="mt-0.5 text-[11px] leading-relaxed text-[var(--ink-muted)]">
-            Verifikasi kode OTP email pemilik terlebih dahulu sebelum mengganti PIN. Mengganti PIN akan mengeluarkan sesi perangkat lain.
-          </p>
-        </div>
-
-        <StepUpPinFlow
-          purpose="change_pin"
-          onSuccess={async () => {
-            await onConfigChanged();
-          }}
-        />
-      </div>
     </section>
   );
 }

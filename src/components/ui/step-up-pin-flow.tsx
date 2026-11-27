@@ -21,6 +21,7 @@ interface StepUpPinFlowProps {
   purpose: OtpPurpose;
   onSuccess: (message: string) => void | Promise<void>;
   onCancel?: () => void;
+  onStepChange?: (step: StepNumber) => void;
 }
 
 type StepNumber = 1 | 2 | 3;
@@ -47,7 +48,7 @@ function formatMmSs(totalSeconds: number): string {
   return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
-export function StepUpPinFlow({ purpose, onSuccess, onCancel }: StepUpPinFlowProps) {
+export function StepUpPinFlow({ purpose, onSuccess, onCancel, onStepChange }: StepUpPinFlowProps) {
   const [step, setStep] = useState<StepNumber>(1);
   const [otp, setOtp] = useState("");
   const [verificationToken, setVerificationToken] = useState<string | null>(null);
@@ -67,6 +68,10 @@ export function StepUpPinFlow({ purpose, onSuccess, onCancel }: StepUpPinFlowPro
 
   const api = ENDPOINTS[purpose];
   const isChangePin = purpose === "change_pin";
+
+  useEffect(() => {
+    onStepChange?.(step);
+  }, [step, onStepChange]);
 
   useEffect(() => {
     if (cooldownSeconds <= 0) return;

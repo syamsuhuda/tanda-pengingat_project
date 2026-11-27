@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, CheckCircle2, Clock, PartyPopper, ShieldAlert } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, ShieldAlert } from "lucide-react";
 import { formatIsoToWibTime } from "@/lib/timezone";
 import type { ConfirmedBy } from "@/lib/types";
 
@@ -87,9 +87,9 @@ export function ConfirmAttendanceCard({
 
   if (status === "already_confirmed") {
     return (
-      <section className="overflow-x-clip rounded-2xl border border-[var(--success-border)] bg-[var(--surface)] p-5 shadow-sm sm:p-8">
+      <section className="overflow-x-clip rounded-2xl border border-sky-500/35 bg-[var(--surface)] p-5 shadow-sm sm:p-8">
         <div className="flex flex-col items-center text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--success-bg)] text-[var(--success-fg)]">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-sky-500/15 text-sky-600 dark:text-sky-400">
             <CheckCircle2
               className={`h-9 w-9 ${justCelebrated ? "animate-celebrate-pop" : ""}`}
               strokeWidth={2.2}
@@ -97,30 +97,30 @@ export function ConfirmAttendanceCard({
             />
           </div>
 
-          <div className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-[var(--success-border)] bg-[var(--success-bg)] px-2.5 py-1 text-xs font-bold text-[var(--success-fg)]">
-            <PartyPopper className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-            <span>Absen Tercatat</span>
+          <div className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-sky-500/30 bg-sky-500/10 px-2.5 py-1 text-xs font-bold text-sky-700 dark:text-sky-300">
+            <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+            <span>Absen Kecatat</span>
           </div>
 
           <h1 className="font-display mt-3 text-2xl font-bold text-[var(--ink)] sm:text-3xl">
-            {partnerName ? `Mantap, ${partnerName}!` : "Yeay, sudah tercatat absen!"}
+            {partnerName ? `Oke beres, ${partnerName}!` : "Oke beres, absen udah kecatat!"}
           </h1>
           <p className="mt-1.5 text-sm font-semibold text-[var(--ink-muted)]">{dateFormatted}</p>
 
           <div className="mt-5 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-4 text-left text-sm text-[var(--ink-muted)]">
             {confirmedTime ? (
               <p className="flex items-center gap-2 text-[var(--ink)]">
-                <Clock className="h-4 w-4 shrink-0 text-[var(--success-fg)]" strokeWidth={2} aria-hidden="true" />
+                <Clock className="h-4 w-4 shrink-0 text-sky-600 dark:text-sky-400" strokeWidth={2} aria-hidden="true" />
                 <span>
-                  Tercatat pukul <strong className="font-mono-num">{confirmedTime}</strong>
+                  Kecatat jam <strong className="font-mono-num">{confirmedTime}</strong>
                   {confirmedBy === "dashboard_manual"
-                    ? " (via dashboard)"
-                    : " (via tautan email)"}
+                    ? " (lewat dashboard)"
+                    : " (lewat link email)"}
                 </span>
               </p>
             ) : null}
             <p className="mt-2 leading-relaxed">
-              Pengingat sore dan malam hari ini otomatis dimatikan supaya kamu bisa tenang beraktivitas. Kamu boleh tutup halaman ini sekarang.
+              Oke beres! Absen hari ini udah kecatat, jadi nggak bakal ada pengingat lagi sampai besok. Halaman ini boleh langsung ditutup ya.
             </p>
           </div>
         </div>
@@ -172,13 +172,13 @@ export function ConfirmAttendanceCard({
   }
 
   return (
-    <section className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] p-6 shadow-sm sm:p-8">
-      <p className="font-mono-num text-xs font-semibold text-[var(--accent)]">
-        Konfirmasi Absen Harian (WIB)
+    <section className="rounded-2xl border border-sky-500/30 bg-[var(--surface)] p-6 shadow-sm sm:p-8">
+      <p className="font-mono-num text-xs font-semibold text-sky-600 dark:text-sky-400">
+        Konfirmasi Absen · Waktu WIB
       </p>
 
       <h1 className="font-display mt-2 text-2xl font-bold leading-snug text-[var(--ink)] sm:text-3xl">
-        {partnerName ? `Hai ${partnerName}, sudah absen?` : "Sudah absen hari ini?"}
+        {partnerName ? `Hai ${partnerName}, udah absen?` : "Udah absen hari ini?"}
       </h1>
 
       <p className="font-mono-num mt-1.5 text-sm font-semibold text-[var(--ink-muted)]">
@@ -186,7 +186,7 @@ export function ConfirmAttendanceCard({
       </p>
 
       <p className="mt-3 text-sm leading-relaxed text-[var(--ink-muted)]">
-        Tekan tombol di bawah setelah kamu selesai absen ya. Status akan langsung tersimpan dan pengingat berikutnya hari ini otomatis dimatikan.
+        Kalau udah beres absen, tinggal pencet tombol di bawah ya biar pengingat berikutnya hari ini nggak ke-ping lagi.
       </p>
 
       {submitError ? (
@@ -203,14 +203,14 @@ export function ConfirmAttendanceCard({
         type="button"
         onClick={handleConfirm}
         disabled={submitting}
-        className="btn-primary-accent mt-6 inline-flex min-h-[54px] w-full items-center justify-center gap-2.5 rounded-xl px-6 text-base font-bold transition-colors active:scale-[0.98] disabled:opacity-60"
+        className="mt-6 inline-flex min-h-[54px] w-full items-center justify-center gap-2.5 rounded-xl bg-sky-600 px-6 text-base font-bold text-white transition-colors hover:bg-sky-700 active:scale-[0.98] disabled:opacity-60"
       >
         <CheckCircle2 className="h-5 w-5" strokeWidth={2.2} aria-hidden="true" />
-        <span>{submitting ? "Menyimpan..." : "Yeay, Aku Sudah Absen!"}</span>
+        <span>{submitting ? "Menyimpan..." : "Aku Udah Absen"}</span>
       </button>
 
       <p className="mt-4 text-center text-xs leading-relaxed text-[var(--ink-muted)]">
-        Aman dari pemindai link email: data baru tercatat ketika tombol di atas ditekan.
+        Data baru kecatat pas tombol di atas dipencet.
       </p>
     </section>
   );

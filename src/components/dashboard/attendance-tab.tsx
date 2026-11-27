@@ -36,6 +36,7 @@ interface AttendanceTabProps {
   data: DashboardStatusData;
   onRefresh: () => Promise<void>;
   onRecipientUpdated: (next: ActiveRecipientConfig) => Promise<void>;
+  onOpenSecurityModal?: () => void;
 }
 
 const TIMELINE_META: Record<
@@ -83,6 +84,7 @@ export function AttendanceTab({
   data,
   onRefresh,
   onRecipientUpdated,
+  onOpenSecurityModal,
 }: AttendanceTabProps) {
   const [manualModalOpen, setManualModalOpen] = useState(false);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
@@ -350,11 +352,19 @@ export function AttendanceTab({
           <div className="flex items-start gap-2">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
             <span>
-              Saat ini kamu masih memakai PIN bawaan lama. Disarankan memperbarui ke <strong>PIN 6 digit</strong> melalui menu{" "}
-              <a href="#bot-settings-heading" className="font-bold underline">
-                Pengaturan Bot → Keamanan
-              </a>
-              .
+              Saat ini kamu masih memakai PIN bawaan lama. Disarankan memperbarui ke <strong>PIN 6 digit</strong> melalui tombol{" "}
+              {onOpenSecurityModal ? (
+                <button
+                  type="button"
+                  onClick={onOpenSecurityModal}
+                  className="font-bold underline"
+                >
+                  Keamanan &amp; Ubah PIN
+                </button>
+              ) : (
+                <strong>Keamanan &amp; Ubah PIN</strong>
+              )}{" "}
+              di pojok kanan atas.
             </span>
           </div>
         </div>

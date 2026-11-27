@@ -8,6 +8,7 @@ import {
   CalendarClock,
   CalendarPlus,
   CheckCircle2,
+  KeyRound,
   LogOut,
   RefreshCw,
   X,
@@ -15,11 +16,13 @@ import {
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AttendanceTab } from "@/components/dashboard/attendance-tab";
 import { ItineraryTab } from "@/components/dashboard/itinerary-tab";
+import { SecurityPinModal } from "@/components/dashboard/security-pin-modal";
 import {
   useLiveDashboardStatus,
   type ExternalDashboardEvent,
   type LiveConnectionState,
 } from "@/hooks/useLiveDashboardStatus";
+import { formatWibDateShortIndonesian } from "@/lib/timezone";
 import type { ActiveRecipientConfig, FriendContact } from "@/lib/types";
 
 type ActiveTab = "attendance" | "itinerary";
@@ -68,6 +71,7 @@ export function DashboardShell() {
   const [contacts, setContacts] = useState<FriendContact[]>([]);
   const [contactGroups, setContactGroups] = useState<string[]>([]);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [securityModalOpen, setSecurityModalOpen] = useState(false);
   const [toasts, setToasts] = useState<LiveToastItem[]>([]);
   const [nowTickMs, setNowTickMs] = useState(() => Date.now());
   const toastTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -217,7 +221,18 @@ export function DashboardShell() {
                 </span>
               </div>
               <p className="font-mono-num truncate text-[11px] text-[var(--ink-muted)]">
-                {statusData ? `${statusData.todayFormatted} · ${statusData.nowWibTime}` : "WIB"}
+                {statusData ? (
+                  <>
+                    <span className="sm:hidden">
+                      {`${formatWibDateShortIndonesian(statusData.todayWib).replace(/\s+\d{4}$/, "")} · ${statusData.nowWibTime}`}
+                    </span>
+                    <span className="hidden sm:inline">
+                      {`${statusData.todayFormatted} · ${statusData.nowWibTime}`}
+                    </span>
+                  </>
+                ) : (
+                  "WIB"
+                )}
                 <span className="hidden font-sans md:inline"> · Sinkron {syncLabel}</span>
               </p>
             </div>
@@ -271,7 +286,7 @@ export function DashboardShell() {
             </button>
           </nav>
 
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
             <button
               type="button"
               onClick={() => void Promise.all([triggerRefresh(true, true), loadContacts()])}
@@ -287,6 +302,16 @@ export function DashboardShell() {
               />
             </button>
 
+            <button
+              type="button"
+              onClick={() => setSecurityModalOpen(true)}
+              aria-label="Keamanan dan Ubah PIN"
+              title="Keamanan & Ubah PIN"
+              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-[var(--border-control)] bg-[var(--surface)] text-[var(--ink)] transition-colors hover:bg-[var(--surface-muted)] active:scale-[0.97]"
+            >
+              <KeyRound className="h-4 w-4" strokeWidth={1.9} aria-hidden="true" />
+            </button>
+
             <ThemeToggle />
 
             <button
@@ -294,7 +319,7 @@ export function DashboardShell() {
               onClick={handleLogout}
               disabled={loggingOut}
               aria-label="Keluar dari dashboard"
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-3 text-sm font-semibold text-[var(--ink)] transition-colors hover:bg-[var(--surface-muted)] active:scale-[0.97] disabled:opacity-50"
+              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-2.5 text-sm font-semibold text-[var(--ink)] transition-colors hover:bg-[var(--surface-muted)] active:scale-[0.97] disabled:opacity-50 sm:px-3"
             >
               <LogOut className="h-4 w-4" strokeWidth={1.9} aria-hidden="true" />
               <span className="hidden md:inline">{loggingOut ? "Keluar..." : "Keluar"}</span>
@@ -410,6 +435,7 @@ export function DashboardShell() {
                   data={statusData}
                   onRefresh={() => triggerRefresh(true, true)}
                   onRecipientUpdated={handleRecipientUpdated}
+                  onOpenSecurityModal={() => setSecurityModalOpen(true)}
                 />
               ) : null}
             </div>
@@ -473,6 +499,12 @@ export function DashboardShell() {
           <span>Undangan</span>
         </button>
       </nav>
+
+      <SecurityPinModal
+        open={securityModalOpen}
+        onClose={() => setSecurityModalOpen(false)}
+        onPinUpdated={() => triggerRefresh(true, true)}
+      />
     </div>
   );
 }
