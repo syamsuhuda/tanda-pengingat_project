@@ -949,12 +949,23 @@ export async function getDashboardSnapshotViaPipeline(
     rawRecipient.name.trim().length > 0 &&
     typeof rawRecipient.email === "string" &&
     rawRecipient.email.trim().length > 0
-      ? {
-          name: rawRecipient.name.trim(),
-          email: rawRecipient.email.trim().toLowerCase(),
-          updatedAt: typeof rawRecipient.updatedAt === "string" ? rawRecipient.updatedAt : "",
-        }
-      : { name: env.PARTNER_NAME, email: env.PARTNER_EMAIL, updatedAt: "" };
+      ? (() => {
+          const whatsapp = normalizeStoredWhatsApp(rawRecipient.whatsapp);
+          const channel = normalizeStoredChannel(rawRecipient.channel);
+          return {
+            name: rawRecipient.name.trim(),
+            email: rawRecipient.email.trim().toLowerCase(),
+            ...(whatsapp ? { whatsapp } : {}),
+            channel,
+            updatedAt: typeof rawRecipient.updatedAt === "string" ? rawRecipient.updatedAt : "",
+          };
+        })()
+      : {
+          name: env.PARTNER_NAME,
+          email: env.PARTNER_EMAIL,
+          channel: "email",
+          updatedAt: "",
+        };
 
   const rawMsg = parseStoredJson<CustomMessageConfig>(results[7]);
   let customMessage: CustomMessageConfig | null = null;

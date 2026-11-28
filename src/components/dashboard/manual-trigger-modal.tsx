@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, Mail, MessageCircle, Send, X } from "lucide-react";
+import { AlertCircle, Loader2, Mail, MessageCircle, Send, X } from "lucide-react";
 import type { AttendanceIcsConfig, NotificationChannel } from "@/lib/types";
 
 interface ManualTriggerModalProps {
@@ -11,6 +11,8 @@ interface ManualTriggerModalProps {
   recipientEmail: string;
   recipientWhatsapp?: string;
   recipientChannel?: NotificationChannel;
+  waGatewayOk?: boolean | null;
+  waGatewayLabel?: string;
   defaultSenderName: string;
   isAlreadyConfirmed: boolean;
   activeCustomMessage: string | null;
@@ -26,6 +28,8 @@ export function ManualTriggerModal({
   recipientEmail,
   recipientWhatsapp,
   recipientChannel = "email",
+  waGatewayOk = null,
+  waGatewayLabel,
   defaultSenderName,
   isAlreadyConfirmed,
   activeCustomMessage,
@@ -234,42 +238,100 @@ export function ManualTriggerModal({
             />
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <span className="block text-xs font-semibold text-[var(--ink)]">
-              Kanal Pengiriman
+              Pilih Kanal Pengiriman
             </span>
-            <div className="grid grid-cols-3 gap-1 rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] p-1">
+            <div role="radiogroup" aria-label="Pilih kanal pengiriman" className="space-y-1.5">
               {(
                 [
-                  { value: "email", label: "Email", icon: Mail },
-                  { value: "whatsapp", label: "WhatsApp", icon: MessageCircle },
-                  { value: "both", label: "Keduanya", icon: Send },
-                ] as const
+                  {
+                    value: "email" as const,
+                    title: "Email saja",
+                    subtitle: recipientEmail,
+                    icon: Mail,
+                    disabled: false,
+                  },
+                  {
+                    value: "whatsapp" as const,
+                    title: "WhatsApp saja",
+                    subtitle: recipientWhatsapp || "Nomor WA belum diisi di Pengaturan Bot",
+                    icon: MessageCircle,
+                    disabled: !recipientWhatsapp,
+                    showWaBadge: true,
+                  },
+                  {
+                    value: "both" as const,
+                    title: "Email & WhatsApp (Keduanya)",
+                    subtitle: recipientWhatsapp
+                      ? `${recipientEmail} + ${recipientWhatsapp}`
+                      : `${recipientEmail} · Nomor WA belum diisi`,
+                    icon: Send,
+                    disabled: !recipientWhatsapp,
+                    showWaBadge: true,
+                  },
+                ]
               ).map((opt) => {
-                const disabled =
-                  !recipientWhatsapp && (opt.value === "whatsapp" || opt.value === "both");
                 const Icon = opt.icon;
+                const isSelected = channel === opt.value;
+                const isDefault = recipientChannel === opt.value;
                 return (
                   <button
                     key={opt.value}
                     type="button"
-                    disabled={disabled}
+                    role="radio"
+                    aria-checked={isSelected}
+                    disabled={opt.disabled}
                     onClick={() => setChannel(opt.value)}
-                    className={`inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${
-                      channel === opt.value
-                        ? "bg-[var(--surface)] text-[var(--ink)] shadow-xs"
-                        : "text-[var(--ink-muted)] hover:text-[var(--ink)]"
+                    className={`flex w-full items-start gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                      isSelected
+                        ? "border-[var(--accent)] bg-[var(--accent-tint)]/45"
+                        : "border-[var(--border-subtle)] bg-[var(--surface-elevated)] hover:border-[var(--border-control)]"
                     }`}
                   >
-                    <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} aria-hidden="true" />
-                    <span>{opt.label}</span>
+                    <Icon
+                      className={`mt-0.5 h-4 w-4 shrink-0 ${
+                        isSelected ? "text-[var(--accent)]" : "text-[var(--ink-muted)]"
+                      }`}
+                      strokeWidth={2}
+                      aria-hidden="true"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-xs font-bold text-[var(--ink)]">{opt.title}</span>
+                        {isDefault ? (
+                          <span className="rounded bg-[var(--surface)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--ink-muted)]">
+                            Default
+                          </span>
+                        ) : null}
+                        {opt.showWaBadge && waGatewayOk !== null ? (
+                          <span
+                            className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${
+                              waGatewayOk
+                                ? "border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-fg)]"
+                                : "border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-fg)]"
+                            }`}
+                          >
+                            {waGatewayOk ? "Terhubung" : waGatewayLabel ?? "Terputus"}
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="mt-0.5 truncate text-[11px] text-[var(--ink-muted)]">
+                        {opt.subtitle}
+                      </p>
+                    </div>
                   </button>
                 );
               })}
             </div>
+
             {!recipientWhatsapp ? (
-              <p className="text-[11px] text-[var(--ink-muted)]">
-                Isi nomor WhatsApp di Pengaturan Bot &gt; Penerima untuk mengaktifkan kanal WhatsApp.
+              <p className="text-[11px] text-[var(--warning-fg)]">
+                Isi nomor WhatsApp di Pengaturan Bot &gt; Penerima untuk mengaktifkan opsi WhatsApp.
+              </p>
+            ) : waGatewayOk === false ? (
+              <p className="text-[11px] text-[var(--warning-fg)]">
+                Perhatian: WA Gateway saat ini sedang terputus; pengiriman WhatsApp berisiko gagal.
               </p>
             ) : null}
           </div>
@@ -379,7 +441,10 @@ export function ManualTriggerModal({
               className="btn-primary-accent inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-5 text-sm font-bold transition-colors active:scale-[0.98] disabled:opacity-60"
             >
               {submitting ? (
-                <span>Mengirim...</span>
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} aria-hidden="true" />
+                  <span>Mengirim...</span>
+                </>
               ) : (
                 <>
                   <Send className="h-4 w-4" strokeWidth={2} aria-hidden="true" />

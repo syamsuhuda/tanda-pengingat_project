@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { AlertCircle, Check, MessageSquareHeart, Trash2 } from "lucide-react";
-import type { CustomMessageConfig, CustomMessageScope } from "@/lib/types";
+import type { CustomMessageConfig, CustomMessageScope, NotificationChannel } from "@/lib/types";
 
 interface CustomMessageCardProps {
   customMessage: CustomMessageConfig | null;
   recipientName: string;
+  channel?: NotificationChannel;
   onChanged: () => Promise<void>;
 }
 
@@ -19,6 +20,7 @@ const PRESET_MESSAGES = [
 export function CustomMessageCard({
   customMessage,
   recipientName,
+  channel = "email",
   onChanged,
 }: CustomMessageCardProps) {
   const [messageText, setMessageText] = useState(customMessage?.message ?? "");
@@ -135,7 +137,11 @@ export function CustomMessageCard({
             Catatan Kecil untuk {recipientName}
           </h2>
           <p className="mt-0.5 text-xs text-[var(--ink-muted)]">
-            Disisipkan ke dalam email pengingat otomatis.
+            {channel === "whatsapp"
+              ? "Disisipkan ke dalam pengingat WhatsApp otomatis."
+              : channel === "both"
+                ? "Disisipkan ke dalam pengingat otomatis (Email & WhatsApp)."
+                : "Disisipkan ke dalam pengingat otomatis (Email / WhatsApp)."}
           </p>
         </div>
 

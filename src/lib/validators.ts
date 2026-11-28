@@ -52,17 +52,20 @@ export const whatsappTestSchema = z.object({
   to: z
     .string()
     .trim()
-    .min(1, "Nomor WhatsApp tujuan wajib diisi")
     .max(30, "Nomor WhatsApp terlalu panjang")
-    .transform((val) => normalizeIndonesianPhone(val))
+    .optional()
+    .transform((val) => {
+      if (!val) return undefined;
+      return normalizeIndonesianPhone(val);
+    })
     .refine(
-      (normalized) => isValidIndonesianPhone(normalized),
+      (normalized) => !normalized || isValidIndonesianPhone(normalized),
       "Format nomor WhatsApp harus valid (awalan 08xxx atau 628xxx, 10-15 digit)",
     ),
   message: z
     .string()
     .trim()
-    .max(500, "Pesan tes maksimal 500 karakter")
+    .max(1000, "Pesan tes maksimal 1000 karakter")
     .optional()
     .transform((val) => (val ? val : undefined)),
 });

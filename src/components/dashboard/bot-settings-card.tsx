@@ -39,8 +39,24 @@ interface BotSettingsCardProps {
   checkingNow?: boolean;
   onCheckNow?: () => Promise<void>;
   onOpenCronGuide?: () => void;
+  onOpenHealthDiagnostics?: () => void;
   onRecipientUpdated: (next: ActiveRecipientConfig) => Promise<void>;
   onConfigChanged: () => Promise<void>;
+}
+
+const DEFAULT_WA_TEST_MESSAGE =
+  "Halo! Ini pesan tes dari Pengingat Jadwal untuk memastikan bot WhatsApp aktif.";
+
+function normalizeWaPreview(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("0")) return `62${digits.slice(1)}`;
+  if (digits.startsWith("8")) return `62${digits}`;
+  return digits;
+}
+
+function isValidWaNormalized(normalized: string): boolean {
+  return /^628\d{7,12}$/.test(normalized);
 }
 
 const ICS_START_OFFSETS: IcsStartOffsetMinutes[] = [10, 15, 20, 30, 45, 60];
@@ -91,6 +107,7 @@ export function BotSettingsCard({
   checkingNow = false,
   onCheckNow,
   onOpenCronGuide,
+  onOpenHealthDiagnostics,
   onRecipientUpdated,
   onConfigChanged,
 }: BotSettingsCardProps) {
@@ -107,15 +124,7 @@ export function BotSettingsCard({
     text: string;
   } | null>(null);
 
-  const [waGatewayStatus, setWaGatewayStatus] = useState<{
-    configured: boolean;
-    ok: boolean;
-    status: "connected" | "disconnected" | "unconfigured" | "error";
-    label: string;
-    detail: string;
-    uptimeSec: number | null;
-  } | null>(null);
-  const [checkingWaStatus, setCheckingWaStatus] = useState(false);
+  const [waTestMessage, setWaTestMessage] = useState(DEFAULT_WA_TEST_MESSAGE);
   const [testingWaSend, setTestingWaSend] = useState(false);
   const [waTestFeedback, setWaTestFeedback] = useState<{
     type: "success" | "error";
@@ -165,53 +174,6 @@ export function BotSettingsCard({
       setChannel(recipient.channel ?? "email");
     }
   }, [recipient.name, recipient.email, recipient.whatsapp, recipient.channel, recipientDirty]);
-
-  async function refreshWaGatewayStatus() {
-    setCheckingWaStatus(true);
-    try {
-      const response = await fetch("/api/whatsapp/status", { cache: "no-store" });
-      const body = (await response.json()) as {
-        ok: boolean;
-        data?: {
-          configured: boolean;
-          ok: boolean;
-          status: "connected" | "disconnected" | "unconfigured" | "error";
-          label: string;
-          detail: string;
-          uptimeSec: number | null;
-        };
-      };
-      if (response.ok && body.ok && body.data) {
-        setWaGatewayStatus(body.data);
-      } else {
-        setWaGatewayStatus({
-          configured: false,
-          ok: false,
-          status: "error",
-          label: "Gagal Memeriksa",
-          detail: "Tidak dapat mengambil status WhatsApp Gateway.",
-          uptimeSec: null,
-        });
-      }
-    } catch {
-      setWaGatewayStatus({
-        configured: false,
-        ok: false,
-        status: "error",
-        label: "Koneksi Gagal",
-        detail: "Koneksi ke server gagal saat mengecek WhatsApp Gateway.",
-        uptimeSec: null,
-      });
-    } finally {
-      setCheckingWaStatus(false);
-    }
-  }
-
-  useEffect(() => {
-    if (subTab === "recipient" && !waGatewayStatus) {
-      void refreshWaGatewayStatus();
-    }
-  }, [subTab, waGatewayStatus]);
 
   useEffect(() => {
     if (!senderDirty) {
@@ -340,10 +302,20 @@ export function BotSettingsCard({
   async function handleSaveRecipient(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedWa = whatsapp.trim();
+    const normalizedWa = normalizeWaPreview(trimmedWa);
+
     if ((channel === "whatsapp" || channel === "both") && !trimmedWa) {
       setRecipientFeedback({
         type: "error",
         text: "Nomor WhatsApp wajib diisi jika kanal WhatsApp atau Keduanya dipilih.",
+      });
+      return;
+    }
+
+    if (trimmedWa && !isValidWaNormalized(normalizedWa)) {
+      setRecipientFeedback({
+        type: "error",
+        text: "Format nomor WhatsApp tidak valid. Gunakan awalan 08xxx atau 628xxx (10-15 digit).",
       });
       return;
     }
@@ -377,6 +349,10 @@ export function BotSettingsCard({
         return;
       }
 
+      setName(body.data.name);
+      setEmail(body.data.email);
+      setWhatsapp(body.data.whatsapp ?? "");
+      setChannel(body.data.channel ?? "email");
       setRecipientDirty(false);
       setRecipientFeedback({
         type: "success",
@@ -394,11 +370,20 @@ export function BotSettingsCard({
   }
 
   async function handleTestWhatsApp() {
-    const targetPhone = whatsapp.trim() || recipient.whatsapp || "";
-    if (!targetPhone) {
+    const rawTarget = whatsapp.trim() || recipient.whatsapp || "";
+    const normalizedTarget = normalizeWaPreview(rawTarget);
+    if (!normalizedTarget) {
       setWaTestFeedback({
         type: "error",
-        text: "Masukkan nomor WhatsApp terlebih dahulu (contoh: 081234567890).",
+        text: "Masukkan nomor WhatsApp terlebih dahulu di kolom di atas (contoh: 081234567890).",
+      });
+      return;
+    }
+
+    if (!isValidWaNormalized(normalizedTarget)) {
+      setWaTestFeedback({
+        type: "error",
+        text: "Format nomor WhatsApp belum valid (gunakan awalan 08xxx atau 628xxx, 10-15 digit).",
       });
       return;
     }
@@ -410,7 +395,10 @@ export function BotSettingsCard({
       const response = await fetch("/api/whatsapp/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: targetPhone }),
+        body: JSON.stringify({
+          to: normalizedTarget,
+          message: waTestMessage.trim() || undefined,
+        }),
       });
 
       const body = (await response.json()) as {
@@ -428,8 +416,9 @@ export function BotSettingsCard({
 
       setWaTestFeedback({
         type: "success",
-        text: body.message ?? "Pesan tes WhatsApp berhasil dikirim.",
+        text: body.message ?? `Pesan tes WhatsApp terkirim ke ${normalizedTarget}.`,
       });
+      await onConfigChanged();
     } catch {
       setWaTestFeedback({
         type: "error",
@@ -715,65 +704,94 @@ export function BotSettingsCard({
             </button>
           </form>
 
-          <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)]/70 p-3.5">
+          <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)]/70 p-3.5 space-y-2.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <MessageCircle className="h-4 w-4 shrink-0 text-[var(--accent)]" strokeWidth={2} aria-hidden="true" />
                 <span className="text-xs font-semibold text-[var(--ink)]">
-                  WhatsApp Gateway
-                </span>
-                <span
-                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
-                    checkingWaStatus
-                      ? "border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--ink-muted)]"
-                      : waGatewayStatus?.ok
-                        ? "border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-fg)]"
-                        : waGatewayStatus?.status === "unconfigured"
-                          ? "border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--ink-muted)]"
-                          : "border-[var(--danger-border)] bg-[var(--danger-bg)] text-[var(--danger-fg)]"
-                  }`}
-                >
-                  {checkingWaStatus
-                    ? "Memeriksa..."
-                    : waGatewayStatus?.label ?? "Belum dicek"}
+                  Uji Coba Bot WhatsApp
                 </span>
               </div>
 
-              <div className="flex items-center gap-2">
+              {onOpenHealthDiagnostics ? (
                 <button
                   type="button"
-                  onClick={() => void refreshWaGatewayStatus()}
-                  disabled={checkingWaStatus}
-                  className="inline-flex min-h-[34px] items-center gap-1.5 rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-2.5 text-xs font-medium text-[var(--ink)] transition-colors hover:bg-[var(--surface-elevated)] disabled:opacity-60"
+                  onClick={onOpenHealthDiagnostics}
+                  className="text-[11px] font-semibold text-[var(--accent)] hover:underline"
                 >
-                  <RefreshCw
-                    className={`h-3.5 w-3.5 ${checkingWaStatus ? "animate-spin" : ""}`}
-                    strokeWidth={2}
-                    aria-hidden="true"
-                  />
-                  <span>Cek Status</span>
+                  Lihat di Diagnosa Kesehatan Bot
                 </button>
-
-                <button
-                  type="button"
-                  onClick={() => void handleTestWhatsApp()}
-                  disabled={testingWaSend}
-                  className="inline-flex min-h-[34px] items-center gap-1.5 rounded-lg bg-[var(--accent)] px-3 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-                >
-                  <Send className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-                  <span>{testingWaSend ? "Mengirim..." : "Tes Kirim WA"}</span>
-                </button>
-              </div>
+              ) : null}
             </div>
 
-            {waGatewayStatus ? (
-              <p className="mt-2 text-xs text-[var(--ink-muted)]">{waGatewayStatus.detail}</p>
-            ) : null}
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <label
+                  htmlFor="wa-test-custom-message"
+                  className="text-[11px] font-semibold text-[var(--ink-muted)]"
+                >
+                  Pesan Tes Custom
+                </label>
+                <div className="flex items-center gap-2.5">
+                  {waTestMessage !== DEFAULT_WA_TEST_MESSAGE ? (
+                    <button
+                      type="button"
+                      onClick={() => setWaTestMessage(DEFAULT_WA_TEST_MESSAGE)}
+                      className="text-[11px] font-medium text-[var(--accent)] hover:underline"
+                    >
+                      Reset Default
+                    </button>
+                  ) : null}
+                  <span className="font-mono-num text-[11px] text-[var(--ink-muted)]">
+                    {waTestMessage.length}/1000
+                  </span>
+                </div>
+              </div>
+
+              <textarea
+                id="wa-test-custom-message"
+                rows={2}
+                maxLength={1000}
+                value={waTestMessage}
+                onChange={(event) => {
+                  setWaTestMessage(event.target.value);
+                  if (waTestFeedback) setWaTestFeedback(null);
+                }}
+                placeholder={DEFAULT_WA_TEST_MESSAGE}
+                className="mt-1 w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-3 py-2 text-xs leading-relaxed text-[var(--ink)] placeholder:text-[var(--ink-muted)]"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              {(() => {
+                const rawTarget = whatsapp.trim() || recipient.whatsapp || "";
+                const preview = normalizeWaPreview(rawTarget);
+                return preview ? (
+                  <span className="font-mono-num text-[11px] text-[var(--ink-muted)]">
+                    Dikirim ke: <strong className="text-[var(--ink)]">{preview}</strong>
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-[var(--warning-fg)]">
+                    Isi Nomor WhatsApp di atas untuk tes kirim.
+                  </span>
+                );
+              })()}
+
+              <button
+                type="button"
+                onClick={() => void handleTestWhatsApp()}
+                disabled={testingWaSend}
+                className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg bg-[var(--accent)] px-3.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+              >
+                <Send className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                <span>{testingWaSend ? "Mengirim..." : "Tes Kirim WA"}</span>
+              </button>
+            </div>
 
             {waTestFeedback ? (
               <div
                 role={waTestFeedback.type === "error" ? "alert" : "status"}
-                className={`mt-2.5 flex items-start gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${
+                className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${
                   waTestFeedback.type === "error"
                     ? "border-[var(--danger-border)] bg-[var(--danger-bg)] text-[var(--danger-fg)]"
                     : "border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-fg)]"

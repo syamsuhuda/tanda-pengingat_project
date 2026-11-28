@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   AlertCircle,
   AlertTriangle,
@@ -14,6 +14,7 @@ import {
   Clock,
   Copy,
   Mail,
+  MessageCircle,
   Pause,
   PauseCircle,
   Play,
@@ -48,6 +49,35 @@ interface AttendanceTabProps {
   onRefresh: () => Promise<void>;
   onRecipientUpdated: (next: ActiveRecipientConfig) => Promise<void>;
   onOpenSecurityModal?: () => void;
+}
+
+interface WhatsAppDiagnosticsInfo {
+  configured: boolean;
+  ok: boolean;
+  status: "connected" | "pairing" | "disconnected" | "unconfigured" | "error";
+  label: string;
+  detail: string;
+  uptimeSec: number | null;
+  memoryMb: number | null;
+  lastError: string | null;
+}
+
+interface UnifiedDiagnosticsData {
+  botHealth?: BotHealthSummary;
+  whatsapp: WhatsAppDiagnosticsInfo;
+  smtp: { ok: boolean; latencyMs: number; detail: string };
+  redis: { ok: boolean; latencyMs: number | null; detail: string };
+}
+
+function formatUptimeIndonesian(uptimeSec: number | null): string | null {
+  if (uptimeSec === null || uptimeSec < 0) return null;
+  const totalMinutes = Math.floor(uptimeSec / 60);
+  if (totalMinutes < 1) return `${uptimeSec} dtk`;
+  const hours = Math.floor(totalMinutes / 60);
+  const mins = totalMinutes % 60;
+  if (hours === 0) return `${mins} mnt`;
+  if (mins === 0) return `${hours} jam`;
+  return `${hours} jam ${mins} mnt`;
 }
 
 const TIMELINE_META: Record<
@@ -118,9 +148,59 @@ export function AttendanceTab({
   const [healthDialogOpen, setHealthDialogOpen] = useState(false);
   const [healthCheckBusy, setHealthCheckBusy] = useState(false);
   const [liveBotHealthOverride, setLiveBotHealthOverride] = useState<BotHealthSummary | null>(null);
+  const [waGatewayStatus, setWaGatewayStatus] = useState<WhatsAppDiagnosticsInfo | null>(null);
+  const [diagnosticsData, setDiagnosticsData] = useState<UnifiedDiagnosticsData | null>(null);
+  const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
   const [cronGuideOpen, setCronGuideOpen] = useState(false);
   const [copiedCronUrl, setCopiedCronUrl] = useState(false);
   const [nowWibMinutes, setNowWibMinutes] = useState(() => getCurrentWibMinutes());
+
+  const fetchWaStatus = useCallback(async () => {
+    try {
+      const response = await fetch("/api/whatsapp/status", { cache: "no-store" });
+      const body = (await response.json()) as {
+        ok: boolean;
+        data?: WhatsAppDiagnosticsInfo;
+      };
+      if (response.ok && body.ok && body.data) {
+        setWaGatewayStatus(body.data);
+      }
+    } catch {
+      // Abaikan jika browser sedang offline; status akan ditangani oleh connectionState.
+    }
+  }, []);
+
+  const fetchUnifiedDiagnostics = useCallback(async () => {
+    setDiagnosticsLoading(true);
+    try {
+      const response = await fetch("/api/health/diagnostics", { cache: "no-store" });
+      const body = (await response.json()) as {
+        ok: boolean;
+        data?: UnifiedDiagnosticsData;
+      };
+      if (response.ok && body.ok && body.data) {
+        setDiagnosticsData(body.data);
+        setWaGatewayStatus(body.data.whatsapp);
+        if (body.data.botHealth) {
+          setLiveBotHealthOverride(body.data.botHealth);
+        }
+      }
+    } catch {
+      // Biarkan panel diagnosa tetap menampilkan data terakhir yang tersedia.
+    } finally {
+      setDiagnosticsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchWaStatus();
+  }, [fetchWaStatus, data.recipient.channel, data.recipient.whatsapp]);
+
+  useEffect(() => {
+    if (healthDialogOpen) {
+      void fetchUnifiedDiagnostics();
+    }
+  }, [healthDialogOpen, fetchUnifiedDiagnostics]);
 
   useEffect(() => {
     setNowWibMinutes(getCurrentWibMinutes());
@@ -171,10 +251,11 @@ export function AttendanceTab({
     setStatusFeedback(null);
 
     try {
-      const response = await fetch("/api/health/check", {
-        method: "POST",
-      });
-      const body = (await response.json()) as {
+      const [checkRes] = await Promise.all([
+        fetch("/api/health/check", { method: "POST" }),
+        fetchUnifiedDiagnostics(),
+      ]);
+      const body = (await checkRes.json()) as {
         ok: boolean;
         message?: string;
         data?: {
@@ -182,7 +263,7 @@ export function AttendanceTab({
         };
       };
 
-      if (!response.ok || !body.ok || !body.data?.botHealth) {
+      if (!checkRes.ok || !body.ok || !body.data?.botHealth) {
         setStatusFeedback({
           type: "error",
           text: body.message ?? "Gagal memeriksa kesehatan sistem.",
@@ -531,6 +612,54 @@ export function AttendanceTab({
               <span className="rounded-md bg-[var(--surface-elevated)] px-2.5 py-1 text-xs font-semibold text-[var(--ink)]">
                 Untuk {data.recipient.name}
               </span>
+              {(() => {
+                const activeChannel = data.recipient.channel ?? "email";
+                const channelBadgeLabel =
+                  activeChannel === "both"
+                    ? "Kanal: Email + WA"
+                    : activeChannel === "whatsapp"
+                      ? "Kanal: WhatsApp"
+                      : "Kanal: Email";
+                const usesWa = activeChannel === "whatsapp" || activeChannel === "both";
+                const missingWaNumber = usesWa && !data.recipient.whatsapp;
+                const waDisconnected = usesWa && Boolean(data.recipient.whatsapp) && waGatewayStatus !== null && !waGatewayStatus.ok;
+                const serviceHealthy = !missingWaNumber && !waDisconnected;
+                const serviceLabel = missingWaNumber
+                  ? "Nomor WA Kosong"
+                  : waDisconnected
+                    ? "WA Terputus"
+                    : activeChannel === "whatsapp"
+                      ? "WA Terhubung"
+                      : activeChannel === "both"
+                        ? "Email & WA Siap"
+                        : "Email Siap";
+                const serviceDotClass = missingWaNumber || waDisconnected
+                  ? "bg-amber-500"
+                  : "bg-emerald-500";
+                const serviceBadgeClass = missingWaNumber || waDisconnected
+                  ? "border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-fg)]"
+                  : "border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-fg)]";
+
+                return (
+                  <>
+                    <span className="rounded-md border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-2.5 py-1 text-xs font-semibold text-[var(--ink)]">
+                      {channelBadgeLabel}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setHealthDialogOpen(true)}
+                      title="Klik untuk membuka Diagnosa Kesehatan Bot"
+                      className={`inline-flex min-h-[28px] items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-semibold transition-opacity hover:opacity-85 ${serviceBadgeClass}`}
+                    >
+                      <span
+                        className={`h-1.5 w-1.5 shrink-0 rounded-full ${serviceDotClass} ${serviceHealthy && usesWa ? "animate-pulse" : ""}`}
+                        aria-hidden="true"
+                      />
+                      <span>{serviceLabel}</span>
+                    </button>
+                  </>
+                );
+              })()}
             </div>
 
             <div className="flex items-center gap-3.5">
@@ -707,18 +836,86 @@ export function AttendanceTab({
                       </p>
                     </div>
 
-                    <div className="mt-2 flex min-h-[24px] items-center">
-                      {hasIcs ? (
-                        <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-[var(--accent-tint)] px-2 py-0.5 text-[11px] font-medium text-[var(--accent)]">
-                          <Calendar className="h-3 w-3 shrink-0" strokeWidth={2} aria-hidden="true" />
-                          <span>+ Kalender</span>
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] text-[var(--ink-muted)]/85">
-                          <Mail className="h-3 w-3 shrink-0 opacity-75" strokeWidth={1.8} aria-hidden="true" />
-                          <span>Email saja</span>
-                        </span>
-                      )}
+                    <div className="mt-2 flex min-h-[24px] flex-wrap items-center gap-1.5">
+                      {(() => {
+                        const activeChannel = data.recipient.channel ?? "email";
+                        const usesWa = activeChannel === "whatsapp" || activeChannel === "both";
+                        const waIssue =
+                          usesWa &&
+                          (!data.recipient.whatsapp || (waGatewayStatus !== null && !waGatewayStatus.ok));
+                        const waIssueTitle = !data.recipient.whatsapp
+                          ? "Nomor WA belum diisi"
+                          : "WA Gateway sedang terputus";
+
+                        if (activeChannel === "whatsapp") {
+                          return (
+                            <span
+                              title={waIssue ? waIssueTitle : "Pengingat dikirim via WhatsApp"}
+                              className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400"
+                            >
+                              <MessageCircle className="h-3 w-3 shrink-0" strokeWidth={2} aria-hidden="true" />
+                              <span>WhatsApp</span>
+                              {waIssue ? (
+                                <span
+                                  className="ml-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
+                                  aria-label={waIssueTitle}
+                                />
+                              ) : null}
+                            </span>
+                          );
+                        }
+
+                        if (activeChannel === "both") {
+                          return (
+                            <>
+                              <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-[var(--surface)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--ink-muted)]">
+                                <Mail className="h-3 w-3 shrink-0" strokeWidth={1.9} aria-hidden="true" />
+                                <span>Email</span>
+                              </span>
+                              <span
+                                title={waIssue ? waIssueTitle : "WhatsApp aktif"}
+                                className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-emerald-500/25 bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400"
+                              >
+                                <MessageCircle className="h-3 w-3 shrink-0" strokeWidth={2} aria-hidden="true" />
+                                <span>WA</span>
+                                {waIssue ? (
+                                  <span
+                                    className="ml-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
+                                    aria-label={waIssueTitle}
+                                  />
+                                ) : null}
+                              </span>
+                              {hasIcs ? (
+                                <span
+                                  title="Lampiran kalender .ics pada email"
+                                  className="inline-flex items-center gap-0.5 whitespace-nowrap rounded-md bg-[var(--accent-tint)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--accent)]"
+                                >
+                                  <Calendar className="h-2.5 w-2.5 shrink-0" strokeWidth={2} aria-hidden="true" />
+                                  <span>.ics</span>
+                                </span>
+                              ) : null}
+                            </>
+                          );
+                        }
+
+                        return hasIcs ? (
+                          <>
+                            <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-[var(--surface)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--ink-muted)]">
+                              <Mail className="h-3 w-3 shrink-0" strokeWidth={1.9} aria-hidden="true" />
+                              <span>Email</span>
+                            </span>
+                            <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-[var(--accent-tint)] px-2 py-0.5 text-[11px] font-medium text-[var(--accent)]">
+                              <Calendar className="h-3 w-3 shrink-0" strokeWidth={2} aria-hidden="true" />
+                              <span>+ Kalender</span>
+                            </span>
+                          </>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-[var(--surface)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--ink-muted)]">
+                            <Mail className="h-3 w-3 shrink-0" strokeWidth={1.9} aria-hidden="true" />
+                            <span>Email</span>
+                          </span>
+                        );
+                      })()}
                     </div>
 
                     <div className="mt-auto flex items-center pt-2.5">
@@ -965,6 +1162,7 @@ export function AttendanceTab({
             <CustomMessageCard
               customMessage={data.customMessage}
               recipientName={data.recipient.name}
+              channel={data.recipient.channel}
               onChanged={onRefresh}
             />
           </div>
@@ -987,6 +1185,7 @@ export function AttendanceTab({
               checkingNow={healthCheckBusy || checkingNow}
               onCheckNow={handleRunHealthCheck}
               onOpenCronGuide={() => setCronGuideOpen(true)}
+              onOpenHealthDiagnostics={() => setHealthDialogOpen(true)}
               onRecipientUpdated={onRecipientUpdated}
               onConfigChanged={onRefresh}
             />
@@ -1009,6 +1208,8 @@ export function AttendanceTab({
         recipientEmail={data.recipient.email}
         recipientWhatsapp={data.recipient.whatsapp}
         recipientChannel={data.recipient.channel}
+        waGatewayOk={waGatewayStatus?.ok ?? null}
+        waGatewayLabel={waGatewayStatus?.label}
         defaultSenderName={data.senderName}
         isAlreadyConfirmed={isConfirmed}
         activeCustomMessage={data.customMessage?.message ?? null}
@@ -1085,48 +1286,108 @@ export function AttendanceTab({
             </div>
 
             <div className="mt-4 space-y-2">
-              {[
-                effectiveBotHealth.checks.redis,
-                effectiveBotHealth.checks.scheduler,
-                effectiveBotHealth.checks.delivery,
-                effectiveBotHealth.checks.schedule,
-              ].map((check) => {
-                const dotColor =
-                  check.status === "ok"
-                    ? "bg-emerald-500"
-                    : check.status === "warning"
-                      ? "bg-amber-500"
-                      : "bg-rose-500";
-                return (
-                  <div
-                    key={check.label}
-                    className="flex items-start gap-2.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3.5 py-2.5"
-                  >
-                    <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dotColor}`} aria-hidden="true" />
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-[var(--ink)]">{check.label}</p>
-                      <p className="mt-0.5 text-[11px] leading-relaxed text-[var(--ink-muted)]">
-                        {check.detail}
-                      </p>
+              {(() => {
+                const waInfo = diagnosticsData?.whatsapp ?? waGatewayStatus;
+                const waUptime = formatUptimeIndonesian(waInfo?.uptimeSec ?? null);
+                const waMetaParts: string[] = [];
+                if (waUptime) waMetaParts.push(`Uptime: ${waUptime}`);
+                if (typeof waInfo?.memoryMb === "number") waMetaParts.push(`RAM: ${waInfo.memoryMb} MB`);
+                const waMetaSuffix = waMetaParts.length > 0 ? ` (${waMetaParts.join(" · ")})` : "";
+
+                const unifiedChecks: Array<{
+                  label: string;
+                  status: "ok" | "warning" | "error";
+                  badgeText?: string;
+                  detail: string;
+                }> = [
+                  {
+                    label: "WhatsApp Gateway (VPS)",
+                    status: diagnosticsLoading && !waInfo
+                      ? "warning"
+                      : waInfo?.ok
+                        ? "ok"
+                        : waInfo?.status === "unconfigured" || waInfo?.status === "pairing"
+                          ? "warning"
+                          : "error",
+                    badgeText: diagnosticsLoading && !waInfo ? "Memeriksa..." : waInfo?.label ?? "Belum dicek",
+                    detail: waInfo
+                      ? `${waInfo.detail}${waMetaSuffix}${waInfo.lastError ? ` · Error: ${waInfo.lastError}` : ""}`
+                      : "Memeriksa koneksi ke WhatsApp Gateway...",
+                  },
+                  {
+                    label: "Layanan Email (SMTP)",
+                    status: diagnosticsData
+                      ? diagnosticsData.smtp.ok
+                        ? "ok"
+                        : "error"
+                      : effectiveBotHealth.checks.delivery.status,
+                    detail: diagnosticsData
+                      ? diagnosticsData.smtp.detail
+                      : effectiveBotHealth.checks.delivery.detail,
+                  },
+                  {
+                    label: "Database / Penyimpanan (Upstash Redis)",
+                    status: diagnosticsData
+                      ? diagnosticsData.redis.ok
+                        ? "ok"
+                        : "error"
+                      : effectiveBotHealth.checks.redis.status,
+                    detail: diagnosticsData
+                      ? diagnosticsData.redis.detail
+                      : effectiveBotHealth.checks.redis.detail,
+                  },
+                  {
+                    label: "Scheduler Otomatis (cron-job.org)",
+                    status: effectiveBotHealth.checks.scheduler.status,
+                    detail: effectiveBotHealth.checks.scheduler.detail,
+                  },
+                ];
+
+                return unifiedChecks.map((check) => {
+                  const dotColor =
+                    check.status === "ok"
+                      ? "bg-emerald-500"
+                      : check.status === "warning"
+                        ? "bg-amber-500"
+                        : "bg-rose-500";
+                  return (
+                    <div
+                      key={check.label}
+                      className="flex items-start gap-2.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3.5 py-2.5"
+                    >
+                      <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dotColor}`} aria-hidden="true" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center justify-between gap-1.5">
+                          <p className="text-xs font-bold text-[var(--ink)]">{check.label}</p>
+                          {check.badgeText ? (
+                            <span className="rounded-md border border-[var(--border-subtle)] bg-[var(--surface)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--ink-muted)]">
+                              {check.badgeText}
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-0.5 text-[11px] leading-relaxed text-[var(--ink-muted)]">
+                          {check.detail}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                });
+              })()}
             </div>
 
             <div className="mt-4 flex flex-col gap-2 sm:flex-row">
               <button
                 type="button"
-                disabled={healthCheckBusy}
+                disabled={healthCheckBusy || diagnosticsLoading}
                 onClick={() => void handleRunHealthCheck()}
                 className="btn-primary-accent inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl px-4 text-xs font-bold transition-colors disabled:opacity-50"
               >
                 <RefreshCw
-                  className={`h-3.5 w-3.5 ${healthCheckBusy ? "animate-spin" : ""}`}
+                  className={`h-3.5 w-3.5 ${healthCheckBusy || diagnosticsLoading ? "animate-spin" : ""}`}
                   strokeWidth={2}
                   aria-hidden="true"
                 />
-                <span>{healthCheckBusy ? "Menguji Server & SMTP..." : "Cek Ulang Sekarang"}</span>
+                <span>{healthCheckBusy || diagnosticsLoading ? "Memeriksa Semua..." : "Cek Ulang Semua"}</span>
               </button>
               <button
                 type="button"

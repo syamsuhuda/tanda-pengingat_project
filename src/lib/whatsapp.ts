@@ -1,7 +1,7 @@
 export interface WhatsAppGatewayHealth {
   configured: boolean;
   ok: boolean;
-  status: "connected" | "disconnected" | "unconfigured" | "error";
+  status: "connected" | "pairing" | "disconnected" | "unconfigured" | "error";
   label: string;
   detail: string;
   uptimeSec: number | null;
@@ -140,8 +140,13 @@ export async function getWhatsAppGatewayHealth(): Promise<WhatsAppGatewayHealth>
       memoryMb?: unknown;
     };
 
-    const gatewayStatus = typeof payload.status === "string" ? payload.status : "unknown";
+    const gatewayStatus = typeof payload.status === "string" ? payload.status.toLowerCase() : "unknown";
     const isConnected = payload.ok === true && gatewayStatus === "connected";
+    const isPairing =
+      gatewayStatus === "pairing" ||
+      gatewayStatus === "connecting" ||
+      gatewayStatus === "qr" ||
+      gatewayStatus === "waiting_qr";
     const uptimeSec =
       typeof payload.uptimeSec === "number" && Number.isFinite(payload.uptimeSec)
         ? Math.max(0, Math.floor(payload.uptimeSec))
@@ -166,6 +171,20 @@ export async function getWhatsAppGatewayHealth(): Promise<WhatsAppGatewayHealth>
           uptimeSec !== null
             ? `WhatsApp Gateway aktif dan siap kirim (uptime ${Math.floor(uptimeSec / 60)} mnt).`
             : "WhatsApp Gateway aktif dan siap kirim.",
+        uptimeSec,
+        connectedAt,
+        memoryMb,
+        lastError,
+      };
+    }
+
+    if (isPairing) {
+      return {
+        configured: true,
+        ok: false,
+        status: "pairing",
+        label: "Menunggu Pairing",
+        detail: "Bot WhatsApp sedang menunggu pairing / scan QR di VPS.",
         uptimeSec,
         connectedAt,
         memoryMb,
