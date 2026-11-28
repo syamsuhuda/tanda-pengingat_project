@@ -433,6 +433,7 @@ export function DashboardShell() {
               {activeTab === "attendance" ? (
                 <AttendanceTab
                   data={statusData}
+                  connectionState={connectionState}
                   onRefresh={() => triggerRefresh(true, true)}
                   onRecipientUpdated={handleRecipientUpdated}
                   onOpenSecurityModal={() => setSecurityModalOpen(true)}

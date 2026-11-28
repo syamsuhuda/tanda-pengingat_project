@@ -3,25 +3,35 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
+  Calendar,
   Check,
+  ChevronDown,
+  ChevronUp,
   Clock,
   Mail,
   RefreshCw,
   UserRound,
 } from "lucide-react";
 import { TimePicker24h } from "@/components/ui/time-picker-24h";
-import { hmTimeToMinutes } from "@/lib/timezone";
+import { addMinutesToHmTime, hmTimeToMinutes } from "@/lib/timezone";
 import type {
   ActiveRecipientConfig,
+  AttendanceIcsConfig,
   AttendanceScheduleConfig,
   AttendanceStage,
+  BotHealthSummary,
   CronHealthSummary,
+  IcsAlarmBeforeMinutes,
+  IcsDurationMinutes,
+  IcsStartOffsetMinutes,
 } from "@/lib/types";
 
 interface BotSettingsCardProps {
   recipient: ActiveRecipientConfig;
   senderName: string;
   schedule: AttendanceScheduleConfig;
+  icsConfig: AttendanceIcsConfig;
+  botHealth?: BotHealthSummary;
   cronHealth?: CronHealthSummary;
   checkingNow?: boolean;
   onCheckNow?: () => Promise<void>;
@@ -29,6 +39,10 @@ interface BotSettingsCardProps {
   onRecipientUpdated: (next: ActiveRecipientConfig) => Promise<void>;
   onConfigChanged: () => Promise<void>;
 }
+
+const ICS_START_OFFSETS: IcsStartOffsetMinutes[] = [10, 15, 20, 30, 45, 60];
+const ICS_DURATIONS: IcsDurationMinutes[] = [15, 30, 60];
+const ICS_ALARMS: IcsAlarmBeforeMinutes[] = [0, 5, 10, 15, 30];
 
 type SettingsSubTab = "recipient" | "schedule";
 
@@ -68,6 +82,8 @@ export function BotSettingsCard({
   recipient,
   senderName,
   schedule,
+  icsConfig,
+  botHealth,
   cronHealth,
   checkingNow = false,
   onCheckNow,
@@ -102,6 +118,21 @@ export function BotSettingsCard({
   const [scheduleDirty, setScheduleDirty] = useState(false);
   const [savingSchedule, setSavingSchedule] = useState(false);
   const [scheduleFeedback, setScheduleFeedback] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+
+  const [icsOpen, setIcsOpen] = useState(false);
+  const [icsDraft, setIcsDraft] = useState(() => ({
+    enabledStages: { ...icsConfig.enabledStages },
+    manualIncludeIcs: icsConfig.manualIncludeIcs,
+    startOffsetMinutes: icsConfig.startOffsetMinutes,
+    durationMinutes: icsConfig.durationMinutes,
+    alarmBeforeMinutes: icsConfig.alarmBeforeMinutes,
+  }));
+  const [icsDirty, setIcsDirty] = useState(false);
+  const [savingIcs, setSavingIcs] = useState(false);
+  const [icsFeedback, setIcsFeedback] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
@@ -142,6 +173,100 @@ export function BotSettingsCard({
     () => validateScheduleOrder(scheduleDraft),
     [scheduleDraft],
   );
+
+  useEffect(() => {
+    if (!icsDirty) {
+      setIcsDraft({
+        enabledStages: {
+          morning: icsConfig.enabledStages.morning,
+          afternoon: icsConfig.enabledStages.afternoon,
+          urgent: icsConfig.enabledStages.urgent,
+        },
+        manualIncludeIcs: icsConfig.manualIncludeIcs,
+        startOffsetMinutes: icsConfig.startOffsetMinutes,
+        durationMinutes: icsConfig.durationMinutes,
+        alarmBeforeMinutes: icsConfig.alarmBeforeMinutes,
+      });
+    }
+  }, [
+    icsConfig.enabledStages.morning,
+    icsConfig.enabledStages.afternoon,
+    icsConfig.enabledStages.urgent,
+    icsConfig.manualIncludeIcs,
+    icsConfig.startOffsetMinutes,
+    icsConfig.durationMinutes,
+    icsConfig.alarmBeforeMinutes,
+    icsDirty,
+  ]);
+
+  const icsBufferMinutes = icsDraft.startOffsetMinutes - icsDraft.alarmBeforeMinutes;
+  const icsValidationError =
+    icsBufferMinutes < 5
+      ? "Jeda antara waktu kirim dan bunyi alarm minimal 5 menit agar notifikasi Google Calendar sempat masuk di HP."
+      : null;
+
+  const icsHeaderSummary = useMemo(() => {
+    const activeNames: string[] = [];
+    if (icsDraft.enabledStages.morning) activeNames.push("Pagi");
+    if (icsDraft.enabledStages.afternoon) activeNames.push("Siang/Sore");
+    if (icsDraft.enabledStages.urgent) activeNames.push("Urgent");
+    const stageText = activeNames.length > 0 ? activeNames.join("+") : "Off";
+    const alarmText =
+      icsDraft.alarmBeforeMinutes === 0 ? "Alarm 0m" : `Alarm -${icsDraft.alarmBeforeMinutes}m`;
+    return `${stageText} · +${icsDraft.startOffsetMinutes}m · ${alarmText}`;
+  }, [icsDraft]);
+
+  const icsSimulationText = useMemo(() => {
+    const firstActiveTime =
+      (scheduleDraft.morning.enabled && scheduleDraft.morning.time) ||
+      (scheduleDraft.afternoon.enabled && scheduleDraft.afternoon.time) ||
+      (scheduleDraft.urgent.enabled && scheduleDraft.urgent.time) ||
+      "09:00";
+    const eventStart = addMinutesToHmTime(firstActiveTime, icsDraft.startOffsetMinutes);
+    const eventEnd = addMinutesToHmTime(eventStart, icsDraft.durationMinutes);
+    const alarmTime = addMinutesToHmTime(eventStart, -icsDraft.alarmBeforeMinutes);
+    return `Simulasi: Kirim ${firstActiveTime} -> Acara ${eventStart}-${eventEnd} WIB -> Notif kalender ~${alarmTime} WIB (buffer aman ${icsBufferMinutes} mnt)`;
+  }, [scheduleDraft, icsDraft, icsBufferMinutes]);
+
+  async function handleSaveIcsConfig() {
+    if (icsValidationError) return;
+    setSavingIcs(true);
+    setIcsFeedback(null);
+
+    try {
+      const response = await fetch("/api/attendance/ics-config", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(icsDraft),
+      });
+      const body = (await response.json()) as {
+        ok: boolean;
+        message?: string;
+        data?: AttendanceIcsConfig;
+      };
+      if (!response.ok || !body.ok || !body.data) {
+        setIcsFeedback({
+          type: "error",
+          text: body.message ?? "Gagal menyimpan pengaturan kalender .ics.",
+        });
+        return;
+      }
+
+      setIcsDirty(false);
+      setIcsFeedback({
+        type: "success",
+        text: body.message ?? "Pengaturan .ics tersimpan.",
+      });
+      await onConfigChanged();
+    } catch {
+      setIcsFeedback({
+        type: "error",
+        text: "Koneksi gagal saat menyimpan pengaturan .ics.",
+      });
+    } finally {
+      setSavingIcs(false);
+    }
+  }
 
   async function handleSaveRecipient(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -576,31 +701,249 @@ export function BotSettingsCard({
           >
             {savingSchedule ? "Menyimpan..." : "Simpan Jadwal"}
           </button>
+
+          <div className="mt-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-3.5">
+            <button
+              type="button"
+              aria-expanded={icsOpen}
+              onClick={() => setIcsOpen((prev) => !prev)}
+              className="flex min-h-[36px] w-full items-center justify-between gap-2 text-left"
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                <Calendar className="h-4 w-4 shrink-0 text-[var(--accent)]" strokeWidth={2} aria-hidden="true" />
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-[var(--ink)]">Undangan Kalender (.ics)</p>
+                  <p className="font-mono-num truncate text-[11px] text-[var(--ink-muted)]">
+                    {icsHeaderSummary}
+                  </p>
+                </div>
+              </div>
+              {icsOpen ? (
+                <ChevronUp className="h-4 w-4 shrink-0 text-[var(--ink-muted)]" strokeWidth={2} aria-hidden="true" />
+              ) : (
+                <ChevronDown className="h-4 w-4 shrink-0 text-[var(--ink-muted)]" strokeWidth={2} aria-hidden="true" />
+              )}
+            </button>
+
+            {icsOpen ? (
+              <div className="mt-3.5 space-y-3 border-t border-[var(--border-subtle)] pt-3.5">
+                <div>
+                  <span className="block text-xs font-semibold text-[var(--ink)]">
+                    Sertakan .ics pada tahap:
+                  </span>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {(
+                      [
+                        { key: "morning", label: "Pagi" },
+                        { key: "afternoon", label: "Siang/Sore" },
+                        { key: "urgent", label: "Urgent" },
+                      ] as const
+                    ).map((item) => {
+                      const active = icsDraft.enabledStages[item.key];
+                      return (
+                        <button
+                          key={item.key}
+                          type="button"
+                          onClick={() => {
+                            setIcsDraft((prev) => ({
+                              ...prev,
+                              enabledStages: {
+                                ...prev.enabledStages,
+                                [item.key]: !active,
+                              },
+                            }));
+                            setIcsDirty(true);
+                            if (icsFeedback) setIcsFeedback(null);
+                          }}
+                          className={`min-h-[38px] rounded-xl border px-3 text-xs font-semibold transition-colors ${
+                            active
+                              ? "border-[var(--accent)] bg-[var(--accent-tint)] text-[var(--accent)]"
+                              : "border-[var(--border-control)] bg-[var(--surface)] text-[var(--ink-muted)] hover:text-[var(--ink)]"
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      );
+                    })}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIcsDraft((prev) => ({
+                          ...prev,
+                          manualIncludeIcs: !prev.manualIncludeIcs,
+                        }));
+                        setIcsDirty(true);
+                        if (icsFeedback) setIcsFeedback(null);
+                      }}
+                      className={`min-h-[38px] rounded-xl border px-3 text-xs font-semibold transition-colors ${
+                        icsDraft.manualIncludeIcs
+                          ? "border-[var(--accent)] bg-[var(--accent-tint)] text-[var(--accent)]"
+                          : "border-[var(--border-control)] bg-[var(--surface)] text-[var(--ink-muted)] hover:text-[var(--ink)]"
+                      }`}
+                    >
+                      Kirim Manual
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+                  <div>
+                    <label
+                      htmlFor="ics-start-offset"
+                      className="block text-[11px] font-semibold text-[var(--ink)]"
+                    >
+                      Mulai Acara
+                    </label>
+                    <select
+                      id="ics-start-offset"
+                      value={icsDraft.startOffsetMinutes}
+                      onChange={(event) => {
+                        const nextOffset = Number(event.target.value) as IcsStartOffsetMinutes;
+                        setIcsDraft((prev) => {
+                          let nextAlarm = prev.alarmBeforeMinutes;
+                          if (nextOffset - nextAlarm < 5) {
+                            nextAlarm = nextOffset >= 10 ? 5 : 0;
+                          }
+                          return {
+                            ...prev,
+                            startOffsetMinutes: nextOffset,
+                            alarmBeforeMinutes: nextAlarm,
+                          };
+                        });
+                        setIcsDirty(true);
+                        if (icsFeedback) setIcsFeedback(null);
+                      }}
+                      className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-2.5 text-base text-[var(--ink)] sm:text-xs"
+                    >
+                      {ICS_START_OFFSETS.map((m) => (
+                        <option key={m} value={m}>
+                          +{m} mnt setelah kirim
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="ics-duration"
+                      className="block text-[11px] font-semibold text-[var(--ink)]"
+                    >
+                      Durasi
+                    </label>
+                    <select
+                      id="ics-duration"
+                      value={icsDraft.durationMinutes}
+                      onChange={(event) => {
+                        setIcsDraft((prev) => ({
+                          ...prev,
+                          durationMinutes: Number(event.target.value) as IcsDurationMinutes,
+                        }));
+                        setIcsDirty(true);
+                        if (icsFeedback) setIcsFeedback(null);
+                      }}
+                      className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-2.5 text-base text-[var(--ink)] sm:text-xs"
+                    >
+                      {ICS_DURATIONS.map((m) => (
+                        <option key={m} value={m}>
+                          {m} menit
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="ics-alarm-before"
+                      className="block text-[11px] font-semibold text-[var(--ink)]"
+                    >
+                      Alarm Kalender
+                    </label>
+                    <select
+                      id="ics-alarm-before"
+                      value={icsDraft.alarmBeforeMinutes}
+                      onChange={(event) => {
+                        setIcsDraft((prev) => ({
+                          ...prev,
+                          alarmBeforeMinutes: Number(event.target.value) as IcsAlarmBeforeMinutes,
+                        }));
+                        setIcsDirty(true);
+                        if (icsFeedback) setIcsFeedback(null);
+                      }}
+                      className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-2.5 text-base text-[var(--ink)] sm:text-xs"
+                    >
+                      {ICS_ALARMS.map((m) => {
+                        const violatesBuffer = icsDraft.startOffsetMinutes - m < 5;
+                        return (
+                          <option key={m} value={m} disabled={violatesBuffer}>
+                            {m === 0 ? "Saat acara mulai (0 mnt)" : `${m} mnt sebelum`}
+                            {violatesBuffer ? " (buffer < 5m)" : ""}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                </div>
+
+                <p className="font-mono-num rounded-lg border border-[var(--border-subtle)] bg-[var(--surface)] px-3 py-2 text-[11px] leading-relaxed text-[var(--ink-muted)]">
+                  {icsSimulationText}
+                </p>
+
+                {icsValidationError ? (
+                  <p role="alert" className="text-xs font-medium text-[var(--danger-fg)]">
+                    {icsValidationError}
+                  </p>
+                ) : null}
+
+                {icsFeedback ? (
+                  <div
+                    role={icsFeedback.type === "error" ? "alert" : "status"}
+                    className={`flex items-start gap-2 rounded-xl border px-3 py-2 text-xs font-medium ${
+                      icsFeedback.type === "error"
+                        ? "border-[var(--danger-border)] bg-[var(--danger-bg)] text-[var(--danger-fg)]"
+                        : "border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-fg)]"
+                    }`}
+                  >
+                    <span>{icsFeedback.text}</span>
+                  </div>
+                ) : null}
+
+                <button
+                  type="button"
+                  disabled={savingIcs || Boolean(icsValidationError)}
+                  onClick={() => void handleSaveIcsConfig()}
+                  className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-4 text-xs font-bold text-[var(--ink)] transition-colors hover:bg-[var(--surface-muted)] disabled:opacity-50 sm:w-auto"
+                >
+                  {savingIcs ? "Menyimpan..." : "Simpan Pengaturan .ics"}
+                </button>
+              </div>
+            ) : null}
+          </div>
         </form>
       ) : null}
 
-      {cronHealth ? (
+      {cronHealth || botHealth ? (
         <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border-subtle)] pt-3.5 text-[11px]">
           <div className="flex min-w-0 items-center gap-1.5 text-[var(--ink-muted)]">
             <span
               className={`h-2 w-2 shrink-0 rounded-full ${
-                cronHealth.status === "healthy"
-                  ? "bg-emerald-500"
-                  : cronHealth.status === "delayed"
-                    ? "bg-amber-400"
-                    : "bg-slate-400"
+                botHealth
+                  ? botHealth.checks.scheduler.status === "ok"
+                    ? "bg-emerald-500"
+                    : botHealth.checks.scheduler.status === "warning"
+                      ? "bg-amber-400"
+                      : "bg-rose-500"
+                  : cronHealth?.status === "healthy"
+                    ? "bg-emerald-500"
+                    : "bg-amber-400"
               }`}
               aria-hidden="true"
             />
             <span className="truncate">
-              {cronHealth.status === "healthy"
-                ? `Scheduler aktif${cronHealth.source ? ` · ${cronHealth.source}` : ""} · ${
-                    cronHealth.minutesSinceLastPing === 0
-                      ? "baru saja"
-                      : `${cronHealth.minutesSinceLastPing} mnt lalu`
-                  }`
-                : cronHealth.status === "delayed"
-                  ? `Scheduler tertunda (${cronHealth.minutesSinceLastPing} mnt lalu)`
+              {botHealth
+                ? `${botHealth.checks.scheduler.label}: ${botHealth.checks.scheduler.detail}`
+                : cronHealth?.status === "healthy"
+                  ? `Scheduler aktif · ${cronHealth.minutesSinceLastPing} mnt lalu`
                   : "Scheduler belum terhubung"}
             </span>
           </div>

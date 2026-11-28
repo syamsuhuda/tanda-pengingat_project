@@ -11,6 +11,7 @@ import {
   verifyPinScrypt,
   verifyPurposeToken,
 } from "./security";
+import { sanitizeHealthErrorMessage } from "./bot-health";
 import { getNowWibIso, getNowWibTimeLabel, isValidHmTime, isValidYmdDate } from "./timezone";
 import type {
   ActivePinConfig,
@@ -19,9 +20,11 @@ import type {
   ActivityLogEntry,
   ActivityLogResult,
   ActivityLogType,
+  AttendanceIcsConfig,
   AttendanceScheduleConfig,
   AttendanceStage,
   AttendanceStatusRecord,
+  BotHealthErrorRecord,
   BotPauseConfig,
   ConfirmedBy,
   CronHealthSummary,
@@ -29,6 +32,9 @@ import type {
   CustomMessageConfig,
   CustomMessageScope,
   FriendContact,
+  IcsAlarmBeforeMinutes,
+  IcsDurationMinutes,
+  IcsStartOffsetMinutes,
   OffDayEntry,
   OtpPurpose,
   ResetOtpRecord,
@@ -60,8 +66,11 @@ const REDIS_KEYS = {
   botCustomMessage: "bot:config:custom_message",
   botOffDays: "bot:config:off_days",
   botSchedule: "bot:config:schedule",
+  botIcs: "bot:config:ics",
   dashboardVersion: "bot:meta:version",
   lastCronPing: "bot:meta:last_cron_ping",
+  botHealthLastError: "bot:health:last_error",
+  botHealthLastVerified: "bot:health:last_verified",
   friendContacts: "contacts:friends",
   activityLogs: "logs:activity",
   authPinConfig: "auth:config:pin",
@@ -571,6 +580,167 @@ export async function setActiveSchedule(input: {
   return config;
 }
 
+export const DEFAULT_ATTENDANCE_ICS_CONFIG: AttendanceIcsConfig = {
+  enabledStages: {
+    morning: true,
+    afternoon: false,
+    urgent: false,
+  },
+  manualIncludeIcs: true,
+  startOffsetMinutes: 15,
+  durationMinutes: 30,
+  alarmBeforeMinutes: 5,
+  updatedAt: "",
+};
+
+const VALID_START_OFFSETS = new Set<IcsStartOffsetMinutes>([10, 15, 20, 30, 45, 60]);
+const VALID_DURATIONS = new Set<IcsDurationMinutes>([15, 30, 60]);
+const VALID_ALARMS = new Set<IcsAlarmBeforeMinutes>([0, 5, 10, 15, 30]);
+
+export function sanitizeAttendanceIcsConfig(
+  raw: Partial<AttendanceIcsConfig> | null | undefined,
+): AttendanceIcsConfig {
+  if (!raw || typeof raw !== "object") {
+    return {
+      ...DEFAULT_ATTENDANCE_ICS_CONFIG,
+      enabledStages: { ...DEFAULT_ATTENDANCE_ICS_CONFIG.enabledStages },
+    };
+  }
+
+  const startOffsetMinutes = VALID_START_OFFSETS.has(raw.startOffsetMinutes as IcsStartOffsetMinutes)
+    ? (raw.startOffsetMinutes as IcsStartOffsetMinutes)
+    : DEFAULT_ATTENDANCE_ICS_CONFIG.startOffsetMinutes;
+
+  const durationMinutes = VALID_DURATIONS.has(raw.durationMinutes as IcsDurationMinutes)
+    ? (raw.durationMinutes as IcsDurationMinutes)
+    : DEFAULT_ATTENDANCE_ICS_CONFIG.durationMinutes;
+
+  let alarmBeforeMinutes = VALID_ALARMS.has(raw.alarmBeforeMinutes as IcsAlarmBeforeMinutes)
+    ? (raw.alarmBeforeMinutes as IcsAlarmBeforeMinutes)
+    : DEFAULT_ATTENDANCE_ICS_CONFIG.alarmBeforeMinutes;
+
+  if (startOffsetMinutes - alarmBeforeMinutes < 5) {
+    alarmBeforeMinutes = 5;
+    if (startOffsetMinutes - alarmBeforeMinutes < 5) {
+      alarmBeforeMinutes = 0;
+    }
+  }
+
+  return {
+    enabledStages: {
+      morning:
+        typeof raw.enabledStages?.morning === "boolean"
+          ? raw.enabledStages.morning
+          : DEFAULT_ATTENDANCE_ICS_CONFIG.enabledStages.morning,
+      afternoon:
+        typeof raw.enabledStages?.afternoon === "boolean"
+          ? raw.enabledStages.afternoon
+          : DEFAULT_ATTENDANCE_ICS_CONFIG.enabledStages.afternoon,
+      urgent:
+        typeof raw.enabledStages?.urgent === "boolean"
+          ? raw.enabledStages.urgent
+          : DEFAULT_ATTENDANCE_ICS_CONFIG.enabledStages.urgent,
+    },
+    manualIncludeIcs:
+      typeof raw.manualIncludeIcs === "boolean"
+        ? raw.manualIncludeIcs
+        : DEFAULT_ATTENDANCE_ICS_CONFIG.manualIncludeIcs,
+    startOffsetMinutes,
+    durationMinutes,
+    alarmBeforeMinutes,
+    updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : "",
+  };
+}
+
+export async function getActiveIcsConfig(): Promise<AttendanceIcsConfig> {
+  const redis = getRedis();
+  const raw = await redis.get(REDIS_KEYS.botIcs);
+  return sanitizeAttendanceIcsConfig(parseStoredJson<Partial<AttendanceIcsConfig>>(raw));
+}
+
+export async function setActiveIcsConfig(
+  input: Omit<AttendanceIcsConfig, "updatedAt">,
+): Promise<AttendanceIcsConfig> {
+  const config: AttendanceIcsConfig = {
+    ...sanitizeAttendanceIcsConfig(input),
+    updatedAt: getNowWibIso(),
+  };
+
+  const redis = getRedis();
+  await redis.set(REDIS_KEYS.botIcs, JSON.stringify(config));
+
+  const stages: string[] = [];
+  if (config.enabledStages.morning) stages.push("Pagi");
+  if (config.enabledStages.afternoon) stages.push("Siang/Sore");
+  if (config.enabledStages.urgent) stages.push("Urgent");
+  const stagesText = stages.length > 0 ? stages.join(", ") : "tidak ada";
+  const alarmText =
+    config.alarmBeforeMinutes === 0 ? "saat mulai" : `-${config.alarmBeforeMinutes}m`;
+
+  await appendActivityLog({
+    type: "ics_config_updated",
+    summary: `Pengaturan .ics diperbarui (Tahap: ${stagesText} · Mulai +${config.startOffsetMinutes}m · Durasi ${config.durationMinutes}m · Alarm ${alarmText}).`,
+    result: "success",
+  });
+
+  return config;
+}
+
+export const BOT_HEALTH_ERROR_TTL_SECONDS = 86_400; // 24 jam
+
+export function parseBotHealthError(raw: unknown): BotHealthErrorRecord | null {
+  const parsed = parseStoredJson<BotHealthErrorRecord>(raw);
+  if (
+    !parsed ||
+    (parsed.type !== "smtp" && parsed.type !== "cron" && parsed.type !== "config") ||
+    typeof parsed.message !== "string" ||
+    parsed.message.trim().length === 0 ||
+    typeof parsed.at !== "string"
+  ) {
+    return null;
+  }
+  return parsed;
+}
+
+export async function recordBotHealthError(input: {
+  type: "smtp" | "cron" | "config";
+  message: unknown;
+  stage?: string;
+}): Promise<BotHealthErrorRecord> {
+  const record: BotHealthErrorRecord = {
+    type: input.type,
+    message: sanitizeHealthErrorMessage(input.message),
+    ...(input.stage ? { stage: input.stage } : {}),
+    at: getNowWibIso(),
+  };
+  const redis = getRedis();
+  const pipeline = redis.pipeline();
+  pipeline.set(REDIS_KEYS.botHealthLastError, JSON.stringify(record), {
+    ex: BOT_HEALTH_ERROR_TTL_SECONDS,
+  });
+  pipeline.set(REDIS_KEYS.dashboardVersion, generateVersionToken());
+  await pipeline.exec();
+  return record;
+}
+
+export async function clearBotHealthError(onlyType?: "smtp" | "cron" | "config"): Promise<void> {
+  const redis = getRedis();
+  if (onlyType) {
+    const existing = parseBotHealthError(await redis.get(REDIS_KEYS.botHealthLastError));
+    if (!existing || existing.type !== onlyType) {
+      return;
+    }
+  }
+  await redis.del(REDIS_KEYS.botHealthLastError);
+}
+
+export async function recordBotHealthVerified(): Promise<string> {
+  const nowIso = getNowWibIso();
+  const redis = getRedis();
+  await redis.set(REDIS_KEYS.botHealthLastVerified, nowIso);
+  return nowIso;
+}
+
 export async function appendActivityLogIfNotDuplicate(input: {
   type: ActivityLogType;
   summary: string;
@@ -678,6 +848,8 @@ export interface DashboardRawSnapshot {
   customMessage: CustomMessageConfig | null;
   upcomingOffDays: OffDayEntry[];
   schedule: AttendanceScheduleConfig;
+  icsConfig: AttendanceIcsConfig;
+  healthLastError: BotHealthErrorRecord | null;
   cronHealth: CronHealthSummary;
   version: string;
 }
@@ -704,6 +876,8 @@ export async function getDashboardSnapshotViaPipeline(
   pipeline.get(REDIS_KEYS.botSender);
   pipeline.get(REDIS_KEYS.authPinConfig);
   pipeline.get(REDIS_KEYS.lastCronPing);
+  pipeline.get(REDIS_KEYS.botIcs);
+  pipeline.get(REDIS_KEYS.botHealthLastError);
 
   const results = await pipeline.exec<unknown[]>();
 
@@ -832,6 +1006,10 @@ export async function getDashboardSnapshotViaPipeline(
   );
 
   const cronHealth = buildCronHealthSummary(results[13]);
+  const icsConfig = sanitizeAttendanceIcsConfig(
+    parseStoredJson<Partial<AttendanceIcsConfig>>(results[14]),
+  );
+  const healthLastError = parseBotHealthError(results[15]);
 
   return {
     attendance,
@@ -844,6 +1022,8 @@ export async function getDashboardSnapshotViaPipeline(
     customMessage,
     upcomingOffDays,
     schedule,
+    icsConfig,
+    healthLastError,
     cronHealth,
     version,
   };

@@ -10,10 +10,14 @@ import { sendAttendanceReminder } from "@/lib/mailer";
 import { createAttendanceToken } from "@/lib/security";
 import {
   appendActivityLog,
+  clearBotHealthError,
   getActiveCustomMessage,
+  getActiveIcsConfig,
   getActiveRecipient,
   getActiveSenderName,
   getAttendanceStatus,
+  recordBotHealthError,
+  touchDashboardVersion,
 } from "@/lib/store";
 import { getTodayWibDate } from "@/lib/timezone";
 import { triggerAttendanceSchema } from "@/lib/validators";
@@ -36,12 +40,14 @@ export async function POST(request: Request) {
       parsed.data;
     const todayWib = getTodayWibDate();
 
-    const [existingStatus, recipient, activeCustomMessage, defaultSenderName] = await Promise.all([
-      getAttendanceStatus(todayWib),
-      getActiveRecipient(),
-      getActiveCustomMessage(todayWib),
-      getActiveSenderName(),
-    ]);
+    const [existingStatus, recipient, activeCustomMessage, defaultSenderName, icsConfig] =
+      await Promise.all([
+        getAttendanceStatus(todayWib),
+        getActiveRecipient(),
+        getActiveCustomMessage(todayWib),
+        getActiveSenderName(),
+        getActiveIcsConfig(),
+      ]);
 
     if (existingStatus && !forceSend) {
       return jsonError(
@@ -52,6 +58,7 @@ export async function POST(request: Request) {
       );
     }
 
+    const resolvedIncludeIcs = includeIcs ?? icsConfig.manualIncludeIcs;
     const explicitNote = customNote ?? note;
     const resolvedMessage =
       explicitNote ?? (useActiveMessage ? activeCustomMessage?.message ?? null : null);
@@ -62,25 +69,40 @@ export async function POST(request: Request) {
     const confirmUrl = `${baseUrl}/confirm?date=${encodeURIComponent(todayWib)}&token=${encodeURIComponent(token)}`;
 
     const resolvedSenderName = overrideSenderName ?? defaultSenderName;
-    const sent = await sendAttendanceReminder({
-      stage: "manual",
-      dateWib: todayWib,
-      recipient,
-      senderName: resolvedSenderName,
-      confirmUrl,
-      includeIcs,
-      customMessage: resolvedMessage,
-    });
+    let sent: { messageId: string };
+    try {
+      sent = await sendAttendanceReminder({
+        stage: "manual",
+        dateWib: todayWib,
+        recipient,
+        senderName: resolvedSenderName,
+        confirmUrl,
+        includeIcs: resolvedIncludeIcs,
+        icsConfig,
+        customMessage: resolvedMessage,
+      });
+    } catch (smtpError) {
+      await recordBotHealthError({
+        type: "smtp",
+        stage: "manual",
+        message: smtpError,
+      });
+      throw smtpError;
+    }
 
-    await appendActivityLog({
-      type: "manual_reminder",
-      summary: `Pengingat manual dikirim ke ${recipient.name} (${todayWib}${includeIcs ? ", dengan .ics" : ", tanpa .ics"}${forceSend && existingStatus ? ", paksa kirim ulang" : ""}).`,
-      result: "success",
-    });
+    await Promise.all([
+      clearBotHealthError("smtp"),
+      appendActivityLog({
+        type: "manual_reminder",
+        summary: `Pengingat manual dikirim ke ${recipient.name} (${todayWib}${resolvedIncludeIcs ? ", dengan .ics" : ", tanpa .ics"}${forceSend && existingStatus ? ", paksa kirim ulang" : ""}).`,
+        result: "success",
+      }),
+      touchDashboardVersion(),
+    ]);
 
     return jsonOk(`Pengingat absen manual berhasil dikirim ke ${recipient.name}.`, {
       dateWib: todayWib,
-      includeIcs,
+      includeIcs: resolvedIncludeIcs,
       messageId: sent.messageId,
     });
   } catch (error) {

@@ -10,14 +10,14 @@ import {
   buildPinResetSuccessEmail,
 } from "./email-templates";
 import {
-  buildAttendanceCalendarSlot,
   generateIcsCalendar,
   slugifyIcsFilename,
 } from "./ics";
 import { sanitizeEmailHeaderValue, sanitizeSenderDisplayName } from "./security";
-import { getManualAttendanceSlot, resolveWibSessionUtcRange } from "./timezone";
+import { resolveActualSendCalendarSlot, resolveWibSessionUtcRange } from "./timezone";
 import type {
   AlarmMinutes,
+  AttendanceIcsConfig,
   AttendanceStage,
   IcsBundleMode,
   ItineraryMessageTone,
@@ -43,6 +43,31 @@ function createGmailTransporter() {
     greetingTimeout: 5000,
     socketTimeout: 7500,
   });
+}
+
+export async function verifySmtpConnection(
+  timeoutMs = 8000,
+): Promise<{ ok: boolean; latencyMs: number; error?: string }> {
+  const start = Date.now();
+  const transporter = createGmailTransporter();
+
+  try {
+    await Promise.race([
+      transporter.verify(),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("SMTP verify timeout")), timeoutMs);
+      }),
+    ]);
+    return { ok: true, latencyMs: Date.now() - start };
+  } catch (err) {
+    return {
+      ok: false,
+      latencyMs: Date.now() - start,
+      error: err instanceof Error ? err.message : "Koneksi Gmail SMTP gagal.",
+    };
+  } finally {
+    transporter.close();
+  }
 }
 
 function formatAddress(recipient: RecipientAddress): string {
@@ -156,8 +181,11 @@ export async function sendAttendanceReminder(params: {
   senderName?: string;
   confirmUrl: string;
   includeIcs: boolean;
+  icsConfig?: Pick<
+    AttendanceIcsConfig,
+    "startOffsetMinutes" | "durationMinutes" | "alarmBeforeMinutes"
+  >;
   customMessage?: string | null;
-  morningScheduleTime?: string;
   scheduledTimeWib?: string;
 }): Promise<{ messageId: string }> {
   const env = getEnv();
@@ -181,21 +209,13 @@ export async function sendAttendanceReminder(params: {
     | undefined;
 
   if (params.includeIcs) {
-    const morningStart = params.morningScheduleTime ?? "09:00";
-    const resolvedSlot =
-      params.stage === "manual"
-        ? (() => {
-            const manual = getManualAttendanceSlot();
-            const range = resolveWibSessionUtcRange(manual.date, manual.startTime, manual.endTime);
-            return {
-              date: manual.date,
-              startTime: manual.startTime,
-              endTime: manual.endTime,
-              dtStartUtc: range.dtStartUtc,
-              dtEndUtc: range.dtEndUtc,
-            };
-          })()
-        : buildAttendanceCalendarSlot(params.dateWib, morningStart, 30);
+    const startOffset = params.icsConfig?.startOffsetMinutes ?? 15;
+    const duration = params.icsConfig?.durationMinutes ?? 30;
+    const alarmBefore = params.icsConfig?.alarmBeforeMinutes ?? 5;
+    const now = new Date();
+    const resolvedSlot = resolveActualSendCalendarSlot(now, startOffset, duration);
+    const unixTs = Math.floor(now.getTime() / 1000);
+    const uniqueUid = `absen-${resolvedSlot.date}-${params.stage}-${unixTs}@tanda-pengingat.vercel.app`;
 
     const summary = `Pengingat Absen ${params.recipient.name} (${resolvedSlot.date})`;
 
@@ -209,7 +229,8 @@ export async function sendAttendanceReminder(params: {
 
     const icsContent = generateIcsCalendar([
       {
-        uidSeed: `attendance:${resolvedSlot.date}:${params.stage}:${resolvedSlot.startTime}`,
+        uidSeed: uniqueUid,
+        uidOverride: uniqueUid,
         summary,
         date: resolvedSlot.date,
         startTime: resolvedSlot.startTime,
@@ -223,7 +244,8 @@ export async function sendAttendanceReminder(params: {
           .join("\n"),
         organizer: { name: safeSenderName, email: env.GMAIL_USER },
         attendees: [recipientAddress],
-        alarmMinutes: 15,
+        alarmMinutes: alarmBefore,
+        dtStamp: now,
       },
     ]);
 
@@ -264,6 +286,11 @@ export async function sendUrgentWithEscalation(params: {
   senderName?: string;
   confirmUrl: string;
   dashboardUrl: string;
+  includeIcs?: boolean;
+  icsConfig?: Pick<
+    AttendanceIcsConfig,
+    "startOffsetMinutes" | "durationMinutes" | "alarmBeforeMinutes"
+  >;
   customMessage?: string | null;
   scheduledTimeWib?: string;
 }): Promise<UrgentDispatchResult> {
@@ -287,7 +314,8 @@ export async function sendUrgentWithEscalation(params: {
       recipient: params.recipient,
       senderName: safeSenderName,
       confirmUrl: params.confirmUrl,
-      includeIcs: false,
+      includeIcs: Boolean(params.includeIcs),
+      icsConfig: params.icsConfig,
       customMessage: params.customMessage,
       scheduledTimeWib: params.scheduledTimeWib,
     }),

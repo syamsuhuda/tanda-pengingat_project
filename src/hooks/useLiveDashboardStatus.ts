@@ -55,6 +55,7 @@ export function useLiveDashboardStatus({
   const abortControllerRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const backoffDelayRef = useRef(BASE_POLL_INTERVAL_MS);
+  const consecutiveFailuresRef = useRef(0);
   const lastAttemptAtRef = useRef(0);
   const stoppedRef = useRef(false);
   const mountedRef = useRef(true);
@@ -143,6 +144,11 @@ export function useLiveDashboardStatus({
           return;
         }
 
+        if (response.status >= 500) {
+          consecutiveFailuresRef.current += 2;
+          throw new Error("Server sedang mengalami gangguan sementara (5xx).");
+        }
+
         const body = (await response.json()) as {
           ok: boolean;
           message?: string;
@@ -154,6 +160,7 @@ export function useLiveDashboardStatus({
         }
 
         const payload = body.data;
+        consecutiveFailuresRef.current = 0;
         backoffDelayRef.current = BASE_POLL_INTERVAL_MS;
         setConnectionState("live");
         setError(null);
@@ -205,16 +212,17 @@ export function useLiveDashboardStatus({
         }
         if (!mountedRef.current || stoppedRef.current) return;
 
+        consecutiveFailuresRef.current += 1;
         const isOfflineNow = typeof navigator !== "undefined" && !navigator.onLine;
-        if (isOfflineNow) {
+        if (isOfflineNow || consecutiveFailuresRef.current >= 2) {
           setConnectionState("offline");
         } else {
           setConnectionState("reconnecting");
-          backoffDelayRef.current = Math.min(
-            backoffDelayRef.current * 2,
-            MAX_POLL_INTERVAL_MS,
-          );
         }
+        backoffDelayRef.current = Math.min(
+          backoffDelayRef.current * 2,
+          MAX_POLL_INTERVAL_MS,
+        );
 
         const errMessage =
           err instanceof Error

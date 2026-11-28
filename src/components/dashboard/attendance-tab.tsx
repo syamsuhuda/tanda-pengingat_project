@@ -6,9 +6,11 @@ import {
   AlertTriangle,
   Ban,
   BellOff,
+  Calendar,
   CalendarOff,
   Check,
   CheckCircle2,
+  ChevronDown,
   Clock,
   Copy,
   Pause,
@@ -25,15 +27,18 @@ import { BotSettingsCard } from "@/components/dashboard/bot-settings-card";
 import { CustomMessageCard } from "@/components/dashboard/custom-message-card";
 import { ManualTriggerModal } from "@/components/dashboard/manual-trigger-modal";
 import { OffDaysCard } from "@/components/dashboard/off-days-card";
+import type { LiveConnectionState } from "@/hooks/useLiveDashboardStatus";
 import { formatHmTimeWibLabel, formatIsoToWibTime } from "@/lib/timezone";
 import type {
   ActiveRecipientConfig,
+  BotHealthSummary,
   DashboardStatusData,
   TimelineStageStatus,
 } from "@/lib/types";
 
 interface AttendanceTabProps {
   data: DashboardStatusData;
+  connectionState: LiveConnectionState;
   onRefresh: () => Promise<void>;
   onRecipientUpdated: (next: ActiveRecipientConfig) => Promise<void>;
   onOpenSecurityModal?: () => void;
@@ -82,6 +87,7 @@ const TIMELINE_META: Record<
 
 export function AttendanceTab({
   data,
+  connectionState,
   onRefresh,
   onRecipientUpdated,
   onOpenSecurityModal,
@@ -103,6 +109,9 @@ export function AttendanceTab({
   const [savingPause, setSavingPause] = useState(false);
   const [pauseNoteExpanded, setPauseNoteExpanded] = useState(false);
   const [checkingNow, setCheckingNow] = useState(false);
+  const [healthDialogOpen, setHealthDialogOpen] = useState(false);
+  const [healthCheckBusy, setHealthCheckBusy] = useState(false);
+  const [liveBotHealthOverride, setLiveBotHealthOverride] = useState<BotHealthSummary | null>(null);
   const [cronGuideOpen, setCronGuideOpen] = useState(false);
   const [copiedCronUrl, setCopiedCronUrl] = useState(false);
 
@@ -114,15 +123,73 @@ export function AttendanceTab({
   }, [data.pauseConfig.paused, data.pauseConfig.note, pauseNoteDirty]);
 
   useEffect(() => {
-    if (!cronGuideOpen) return;
+    setLiveBotHealthOverride(null);
+  }, [data.version, data.botHealth.checkedAt]);
+
+  useEffect(() => {
+    if (!cronGuideOpen && !healthDialogOpen) return;
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setCronGuideOpen(false);
+        setHealthDialogOpen(false);
       }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [cronGuideOpen]);
+  }, [cronGuideOpen, healthDialogOpen]);
+
+  const baseBotHealth = liveBotHealthOverride ?? data.botHealth;
+  const effectiveBotHealth: BotHealthSummary =
+    connectionState === "offline"
+      ? {
+          ...baseBotHealth,
+          state: "offline",
+          label: "Koneksi Terputus",
+          severity: "error",
+          summary: "Browser offline atau server gagal dihubungi 2 kali berturut-turut.",
+          detail: "Periksa koneksi internet lalu tekan Cek Ulang Sekarang.",
+        }
+      : baseBotHealth;
+
+  async function handleRunHealthCheck() {
+    setHealthCheckBusy(true);
+    setStatusFeedback(null);
+
+    try {
+      const response = await fetch("/api/health/check", {
+        method: "POST",
+      });
+      const body = (await response.json()) as {
+        ok: boolean;
+        message?: string;
+        data?: {
+          botHealth?: BotHealthSummary;
+        };
+      };
+
+      if (!response.ok || !body.ok || !body.data?.botHealth) {
+        setStatusFeedback({
+          type: "error",
+          text: body.message ?? "Gagal memeriksa kesehatan sistem.",
+        });
+        return;
+      }
+
+      setLiveBotHealthOverride(body.data.botHealth);
+      setStatusFeedback({
+        type: body.data.botHealth.severity === "error" ? "error" : "success",
+        text: body.message ?? "Pemeriksaan kesehatan sistem selesai.",
+      });
+      await onRefresh();
+    } catch {
+      setStatusFeedback({
+        type: "error",
+        text: "Koneksi gagal saat memeriksa kesehatan sistem.",
+      });
+    } finally {
+      setHealthCheckBusy(false);
+    }
+  }
 
   const isConfirmed = data.attendance !== null;
   const isTodayOff = data.todayOffDay.isOff;
@@ -342,6 +409,24 @@ export function AttendanceTab({
         ? "border-[var(--off-border)]"
         : "border-[var(--border-subtle)]";
 
+  const pillStyles =
+    effectiveBotHealth.state === "active"
+      ? "border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-fg)]"
+      : effectiveBotHealth.state === "holiday"
+        ? "border-[var(--off-border)] bg-[var(--off-bg)] text-[var(--off-fg)]"
+        : effectiveBotHealth.severity === "warning"
+          ? "border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-fg)]"
+          : "border-[var(--danger-border)] bg-[var(--danger-bg)] text-[var(--danger-fg)]";
+
+  const pillDotClass =
+    effectiveBotHealth.state === "active"
+      ? "bg-emerald-500 animate-pulse"
+      : effectiveBotHealth.state === "holiday"
+        ? "bg-sky-500"
+        : effectiveBotHealth.severity === "warning"
+          ? "bg-amber-500"
+          : "bg-rose-500";
+
   return (
     <div className="space-y-5">
       {data.pinMigrationRecommended ? (
@@ -377,20 +462,17 @@ export function AttendanceTab({
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-              {pauseDraft ? (
-                <span className="inline-flex items-center gap-1.5 rounded-md border border-[var(--warning-border)] bg-[var(--warning-bg)] px-2.5 py-1 text-xs font-bold text-[var(--warning-fg)]">
-                  <PauseCircle className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden="true" />
-                  <span>Bot Dijeda</span>
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 rounded-md border border-[var(--success-border)] bg-[var(--success-bg)] px-2.5 py-1 text-xs font-bold text-[var(--success-fg)]">
-                  <span
-                    className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"
-                    aria-hidden="true"
-                  />
-                  <span>Bot Aktif</span>
-                </span>
-              )}
+              <button
+                type="button"
+                onClick={() => setHealthDialogOpen((prev) => !prev)}
+                aria-expanded={healthDialogOpen}
+                title="Klik untuk melihat diagnosa kesehatan sistem bot"
+                className={`inline-flex min-h-[30px] items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-bold transition-opacity hover:opacity-90 ${pillStyles}`}
+              >
+                <span className={`h-2 w-2 shrink-0 rounded-full ${pillDotClass}`} aria-hidden="true" />
+                <span>{effectiveBotHealth.label}</span>
+                <ChevronDown className="h-3.5 w-3.5 opacity-75" strokeWidth={2} aria-hidden="true" />
+              </button>
 
               <span className="font-mono-num rounded-md bg-[var(--surface-elevated)] px-2.5 py-1 text-xs font-medium text-[var(--ink-muted)]">
                 {data.todayFormatted}
@@ -498,12 +580,20 @@ export function AttendanceTab({
                         ) : null}
                         <span>{item.scheduledTimeWib}</span>
                       </p>
-                      <p className="text-[11px] text-[var(--ink-muted)]">
-                        {item.stage === "morning"
-                          ? "Pagi + Kalender"
-                          : item.stage === "afternoon"
-                            ? "Cek Siang / Sore"
-                            : "Urgent + Alert"}
+                      <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--ink-muted)]">
+                        <span>
+                          {item.stage === "morning"
+                            ? "Pagi"
+                            : item.stage === "afternoon"
+                              ? "Cek Siang / Sore"
+                              : "Urgent + Alert"}
+                        </span>
+                        {data.icsConfig.enabledStages[item.stage] ? (
+                          <span className="inline-flex items-center gap-0.5 rounded bg-[var(--accent-tint)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--accent)]">
+                            <Calendar className="h-2.5 w-2.5" strokeWidth={2} aria-hidden="true" />
+                            <span>+ Kalender</span>
+                          </span>
+                        ) : null}
                       </p>
                     </div>
 
@@ -534,48 +624,55 @@ export function AttendanceTab({
           </div>
         </div>
 
-        {data.cronHealth.status !== "healthy" ? (
+        {effectiveBotHealth.severity !== "ok" ? (
           <div
             role="status"
-            className="mt-4 flex flex-col gap-3 rounded-xl border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3.5 py-3 text-xs text-[var(--warning-fg)] sm:flex-row sm:items-center sm:justify-between"
+            className={`mt-4 flex flex-col gap-3 rounded-xl border px-3.5 py-3 text-xs sm:flex-row sm:items-center sm:justify-between ${
+              effectiveBotHealth.severity === "error"
+                ? "border-[var(--danger-border)] bg-[var(--danger-bg)] text-[var(--danger-fg)]"
+                : "border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-fg)]"
+            }`}
           >
             <div className="flex items-start gap-2">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
               <div>
-                <p className="font-bold">
-                  {data.cronHealth.status === "never"
-                    ? "Scheduler otomatis belum memanggil server"
-                    : `Scheduler${data.cronHealth.source ? ` (${data.cronHealth.source})` : ""} terakhir aktif ${data.cronHealth.minutesSinceLastPing} menit lalu`}
-                </p>
-                <p className="mt-0.5 leading-relaxed opacity-90">
-                  {data.cronHealth.status === "never"
-                    ? "Email terjadwal tidak bisa terkirim otomatis sebelum cron eksternal (cron-job.org / GitHub Actions) memanggil endpoint server."
-                    : "Panggilan cron lebih dari 35 menit yang lalu. Pastikan cron eksternal berjalan normal."}
-                </p>
+                <p className="font-bold">{effectiveBotHealth.summary}</p>
+                <p className="mt-0.5 leading-relaxed opacity-90">{effectiveBotHealth.detail}</p>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 shrink-0">
-              <button
-                type="button"
-                disabled={checkingNow}
-                onClick={() => void handleCheckNow()}
-                className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-3 text-xs font-bold text-[var(--ink)] transition-colors hover:bg-[var(--surface-elevated)] active:scale-[0.98] disabled:opacity-50"
-              >
-                <RefreshCw
-                  className={`h-3.5 w-3.5 ${checkingNow ? "animate-spin" : ""}`}
-                  strokeWidth={2}
-                  aria-hidden="true"
-                />
-                <span>{checkingNow ? "Mengecek..." : "Cek Sekarang"}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setCronGuideOpen(true)}
-                className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[var(--ink)] px-3 text-xs font-bold text-[var(--bg)] transition-opacity hover:opacity-90 active:scale-[0.98]"
-              >
-                Cara Hubungkan Cron
-              </button>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              {effectiveBotHealth.state === "scheduler_down" ||
+              effectiveBotHealth.state === "scheduler_delayed" ? (
+                <button
+                  type="button"
+                  onClick={() => setCronGuideOpen(true)}
+                  className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[var(--ink)] px-3.5 text-xs font-bold text-[var(--bg)] transition-opacity hover:opacity-90 active:scale-[0.98]"
+                >
+                  Panduan Cron
+                </button>
+              ) : effectiveBotHealth.state === "no_schedule" ? (
+                <a
+                  href="#bot-settings-heading"
+                  className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[var(--ink)] px-3.5 text-xs font-bold text-[var(--bg)] transition-opacity hover:opacity-90"
+                >
+                  Buka Jam Kirim
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  disabled={healthCheckBusy}
+                  onClick={() => void handleRunHealthCheck()}
+                  className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-[var(--border-control)] bg-[var(--surface)] px-3.5 text-xs font-bold text-[var(--ink)] transition-colors hover:bg-[var(--surface-elevated)] disabled:opacity-50"
+                >
+                  <RefreshCw
+                    className={`h-3.5 w-3.5 ${healthCheckBusy ? "animate-spin" : ""}`}
+                    strokeWidth={2}
+                    aria-hidden="true"
+                  />
+                  <span>{healthCheckBusy ? "Mengecek..." : "Cek Koneksi"}</span>
+                </button>
+              )}
             </div>
           </div>
         ) : null}
@@ -757,9 +854,11 @@ export function AttendanceTab({
             recipient={data.recipient}
             senderName={data.senderName}
             schedule={data.schedule}
+            icsConfig={data.icsConfig}
+            botHealth={effectiveBotHealth}
             cronHealth={data.cronHealth}
-            checkingNow={checkingNow}
-            onCheckNow={handleCheckNow}
+            checkingNow={healthCheckBusy || checkingNow}
+            onCheckNow={handleRunHealthCheck}
             onOpenCronGuide={() => setCronGuideOpen(true)}
             onRecipientUpdated={onRecipientUpdated}
             onConfigChanged={onRefresh}
@@ -777,6 +876,7 @@ export function AttendanceTab({
         defaultSenderName={data.senderName}
         isAlreadyConfirmed={isConfirmed}
         activeCustomMessage={data.customMessage?.message ?? null}
+        icsConfig={data.icsConfig}
         onClose={() => setManualModalOpen(false)}
         onSent={onRefresh}
       />
@@ -811,6 +911,99 @@ export function AttendanceTab({
           setClearSentLocks(false);
         }}
       />
+
+      {healthDialogOpen ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bot-health-dialog-title"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              setHealthDialogOpen(false);
+            }
+          }}
+        >
+          <div className="w-full max-w-md rounded-t-3xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-xl sm:rounded-3xl sm:p-6">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-bold ${pillStyles}`}>
+                  <span className={`h-2 w-2 rounded-full ${pillDotClass}`} aria-hidden="true" />
+                  <span>{effectiveBotHealth.label}</span>
+                </div>
+                <h2 id="bot-health-dialog-title" className="font-display mt-2 text-lg font-bold text-[var(--ink)]">
+                  Diagnosa Kesehatan Bot
+                </h2>
+                <p className="mt-0.5 text-xs text-[var(--ink-muted)]">
+                  {effectiveBotHealth.summary}
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Tutup diagnosa kesehatan bot"
+                onClick={() => setHealthDialogOpen(false)}
+                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] text-[var(--ink-muted)] hover:text-[var(--ink)]"
+              >
+                <X className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              {[
+                effectiveBotHealth.checks.redis,
+                effectiveBotHealth.checks.scheduler,
+                effectiveBotHealth.checks.delivery,
+                effectiveBotHealth.checks.schedule,
+              ].map((check) => {
+                const dotColor =
+                  check.status === "ok"
+                    ? "bg-emerald-500"
+                    : check.status === "warning"
+                      ? "bg-amber-500"
+                      : "bg-rose-500";
+                return (
+                  <div
+                    key={check.label}
+                    className="flex items-start gap-2.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3.5 py-2.5"
+                  >
+                    <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dotColor}`} aria-hidden="true" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-[var(--ink)]">{check.label}</p>
+                      <p className="mt-0.5 text-[11px] leading-relaxed text-[var(--ink-muted)]">
+                        {check.detail}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                disabled={healthCheckBusy}
+                onClick={() => void handleRunHealthCheck()}
+                className="btn-primary-accent inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl px-4 text-xs font-bold transition-colors disabled:opacity-50"
+              >
+                <RefreshCw
+                  className={`h-3.5 w-3.5 ${healthCheckBusy ? "animate-spin" : ""}`}
+                  strokeWidth={2}
+                  aria-hidden="true"
+                />
+                <span>{healthCheckBusy ? "Menguji Server & SMTP..." : "Cek Ulang Sekarang"}</span>
+              </button>
+              <button
+                type="button"
+                disabled={checkingNow}
+                onClick={() => void handleCheckNow()}
+                className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[var(--border-control)] bg-[var(--surface-elevated)] px-3.5 text-xs font-semibold text-[var(--ink)] hover:bg-[var(--surface-muted)] disabled:opacity-50"
+              >
+                {checkingNow ? "Mengecek..." : "Evaluasi Jadwal"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {cronGuideOpen ? (
         <div

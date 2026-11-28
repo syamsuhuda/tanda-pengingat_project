@@ -7,7 +7,9 @@ import {
   acquireStageProcessingLock,
   appendActivityLog,
   appendActivityLogIfNotDuplicate,
+  clearBotHealthError,
   getActiveCustomMessage,
+  getActiveIcsConfig,
   getActiveRecipient,
   getActiveSchedule,
   getActiveSenderName,
@@ -15,6 +17,7 @@ import {
   getAttendanceStatus,
   getBotPauseConfig,
   isOffDay,
+  recordBotHealthError,
   recordCronPing,
   releaseStageProcessingLock,
   setStageSentLock,
@@ -126,9 +129,10 @@ export async function executeCronAttendance(params: {
       );
     }
 
-    const [schedule, sentMap] = await Promise.all([
+    const [schedule, sentMap, icsConfig] = await Promise.all([
       getActiveSchedule(),
       getAllStageSentAt(todayWib),
+      getActiveIcsConfig(),
     ]);
 
     let targetStage: AttendanceStage;
@@ -215,6 +219,8 @@ export async function executeCronAttendance(params: {
           senderName,
           confirmUrl,
           dashboardUrl: baseUrl,
+          includeIcs: icsConfig.enabledStages.urgent,
+          icsConfig,
           customMessage: customMessageText,
           scheduledTimeWib,
         });
@@ -222,6 +228,11 @@ export async function executeCronAttendance(params: {
         if (!dispatch.partner.ok && !dispatch.escalation.ok) {
           await releaseStageProcessingLock(todayWib, "urgent");
           await Promise.all([
+            recordBotHealthError({
+              type: "smtp",
+              stage: "urgent",
+              message: dispatch.partner.error ?? "Gagal mengirim email urgent dan eskalasi.",
+            }),
             appendActivityLog({
               type: "cron_urgent",
               summary: `Gagal mengirim peringatan urgent (${scheduledTimeWib}) ke ${recipient.name} dan eskalasi (${todayWib}).`,
@@ -240,7 +251,16 @@ export async function executeCronAttendance(params: {
         }
 
         if (dispatch.partner.ok) {
-          await setStageSentLock(todayWib, "urgent");
+          await Promise.all([
+            setStageSentLock(todayWib, "urgent"),
+            clearBotHealthError("smtp"),
+          ]);
+        } else {
+          await recordBotHealthError({
+            type: "smtp",
+            stage: "urgent",
+            message: dispatch.partner.error ?? "Gagal mengirim email urgent ke penerima utama.",
+          });
         }
         await releaseStageProcessingLock(todayWib, "urgent");
 
@@ -249,7 +269,7 @@ export async function executeCronAttendance(params: {
           appendActivityLog({
             type: "cron_urgent",
             summary: bothOk
-              ? `Peringatan urgent (${scheduledTimeWib}) ke ${recipient.name} dan email eskalasi terkirim (${todayWib}).`
+              ? `Peringatan urgent (${scheduledTimeWib})${icsConfig.enabledStages.urgent ? " + .ics" : ""} ke ${recipient.name} dan email eskalasi terkirim (${todayWib}).`
               : `Pengiriman urgent (${scheduledTimeWib}, ${todayWib}) berhasil sebagian (partner: ${dispatch.partner.ok ? "ok" : "gagal"}, eskalasi: ${dispatch.escalation.ok ? "ok" : "gagal"}).`,
             result: bothOk ? "success" : "partial",
           }),
@@ -276,7 +296,7 @@ export async function executeCronAttendance(params: {
         );
       }
 
-      const includeIcs = targetStage === "morning";
+      const includeIcs = icsConfig.enabledStages[targetStage];
       let sent: { messageId: string };
       try {
         sent = await sendAttendanceReminder({
@@ -286,14 +306,19 @@ export async function executeCronAttendance(params: {
           senderName,
           confirmUrl,
           includeIcs,
+          icsConfig,
           customMessage: customMessageText,
-          morningScheduleTime: schedule.morning.time,
           scheduledTimeWib,
         });
-      } catch {
+      } catch (smtpError) {
         // Lepaskan lock dan jangan pasang sentLock agar tick berikutnya dapat mencoba ulang.
         await releaseStageProcessingLock(todayWib, targetStage);
         await Promise.all([
+          recordBotHealthError({
+            type: "smtp",
+            stage: targetStage,
+            message: smtpError,
+          }),
           appendActivityLog({
             type: targetStage === "morning" ? "cron_morning" : "cron_afternoon",
             summary: `Gagal mengirim pengingat ${STAGE_NAME[targetStage].toLowerCase()} (${scheduledTimeWib}) ke ${recipient.name} via SMTP (${todayWib}).`,
@@ -310,7 +335,10 @@ export async function executeCronAttendance(params: {
         );
       }
 
-      const lockTimestamp = await setStageSentLock(todayWib, targetStage);
+      const [lockTimestamp] = await Promise.all([
+        setStageSentLock(todayWib, targetStage),
+        clearBotHealthError("smtp"),
+      ]);
       await releaseStageProcessingLock(todayWib, targetStage);
 
       await Promise.all([
@@ -318,8 +346,8 @@ export async function executeCronAttendance(params: {
           type: targetStage === "morning" ? "cron_morning" : "cron_afternoon",
           summary:
             targetStage === "morning"
-              ? `Pengingat pagi (${scheduledTimeWib}) + .ics terkirim ke ${recipient.name} (${todayWib}).`
-              : `Pengecekan sore (${scheduledTimeWib}) terkirim ke ${recipient.name} (${todayWib}).`,
+              ? `Pengingat pagi (${scheduledTimeWib})${includeIcs ? " + .ics" : ""} terkirim ke ${recipient.name} (${todayWib}).`
+              : `Pengecekan siang/sore (${scheduledTimeWib})${includeIcs ? " + .ics" : ""} terkirim ke ${recipient.name} (${todayWib}).`,
           result: "success",
         }),
         touchDashboardVersion(),

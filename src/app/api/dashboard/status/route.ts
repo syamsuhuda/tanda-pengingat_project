@@ -3,6 +3,7 @@ import {
   handleRouteError,
   requireAuthenticatedSession,
 } from "@/lib/api-helpers";
+import { evaluateBotHealth } from "@/lib/bot-health";
 import {
   getDashboardSnapshotViaPipeline,
   getDashboardVersion,
@@ -115,6 +116,25 @@ export async function GET(request: Request) {
       };
     });
 
+    const alarmText =
+      snapshot.icsConfig.alarmBeforeMinutes === 0
+        ? "alarm saat mulai"
+        : `alarm -${snapshot.icsConfig.alarmBeforeMinutes}m`;
+
+    const botHealth = evaluateBotHealth({
+      redisOk: true,
+      recipientEmail: snapshot.recipient.email,
+      paused: snapshot.pauseConfig.paused,
+      pauseNote: snapshot.pauseConfig.note,
+      isTodayOff: todayOffDay.isOff,
+      offDayNote: todayOffDay.note,
+      schedule: snapshot.schedule,
+      cronHealth: snapshot.cronHealth,
+      lastError: snapshot.healthLastError,
+      icsSummaryText: `.ics +${snapshot.icsConfig.startOffsetMinutes}m (${alarmText})`,
+      now,
+    });
+
     const data: DashboardStatusData = {
       unchanged: false,
       version: snapshot.version,
@@ -133,10 +153,12 @@ export async function GET(request: Request) {
       todayOffDay,
       upcomingOffDays: snapshot.upcomingOffDays,
       schedule: snapshot.schedule,
+      icsConfig: snapshot.icsConfig,
       attendance: snapshot.attendance,
       timeline,
       pauseConfig: snapshot.pauseConfig,
       cronHealth: snapshot.cronHealth,
+      botHealth,
       logs: snapshot.logs,
     };
 

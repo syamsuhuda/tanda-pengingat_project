@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
+import { evaluateBotHealth } from "../src/lib/bot-health";
 import {
   buildAttendanceReminderEmail,
   buildEscalationEmail,
@@ -43,11 +44,16 @@ import {
   hmTimeToMinutes,
   isStageMissedWib,
   isWithinAttendanceConfirmWindow,
+  resolveActualSendCalendarSlot,
   resolveDueAutoStage,
   resolveWibSessionUtcRange,
   shiftYmdDate,
 } from "../src/lib/timezone";
-import { scheduleConfigSchema, sendItinerarySchema } from "../src/lib/validators";
+import {
+  attendanceIcsConfigSchema,
+  scheduleConfigSchema,
+  sendItinerarySchema,
+} from "../src/lib/validators";
 
 function unfoldIcs(ics: string): string {
   return ics.replace(/\r\n[ \t]/g, "");
@@ -542,7 +548,115 @@ function runAllAssertions(): void {
     }
   }
 
-  console.log("SEMUA VERIFIKASI TIMEZONE, 24 JAM WIB, ICS DINAMIS, SANITASI HEADER/SENDER, EMAIL, BATCH UID, & KEAMANAN PIN LULUS (19/19 suite).");
+  // 20. Pengaturan .ics fleksibel anti-alarm-basi, TRIGGER:PT0S, UID unik, & State Machine evaluateBotHealth
+  assert.equal(
+    attendanceIcsConfigSchema.safeParse({
+      enabledStages: { morning: true, afternoon: true, urgent: false },
+      manualIncludeIcs: true,
+      startOffsetMinutes: 15,
+      durationMinutes: 30,
+      alarmBeforeMinutes: 5,
+    }).success,
+    true,
+  );
+  assert.equal(
+    attendanceIcsConfigSchema.safeParse({
+      enabledStages: { morning: true, afternoon: false, urgent: false },
+      manualIncludeIcs: true,
+      startOffsetMinutes: 15,
+      durationMinutes: 30,
+      alarmBeforeMinutes: 15,
+    }).success,
+    false,
+  );
+
+  const actualNow = new Date("2026-11-28T02:00:15.000Z"); // 09:00:15 WIB -> dibulatkan 09:01 -> +15m = 09:16
+  const actualSlot = resolveActualSendCalendarSlot(actualNow, 15, 30);
+  assert.equal(actualSlot.date, "2026-11-28");
+  assert.equal(actualSlot.startTime, "09:16");
+  assert.equal(actualSlot.endTime, "09:46");
+
+  const zeroAlarmIcs = unfoldIcs(
+    generateIcsCalendar([
+      {
+        uidSeed: "absen-2026-11-28-morning-1@tanda-pengingat.vercel.app",
+        uidOverride: "absen-2026-11-28-morning-1@tanda-pengingat.vercel.app",
+        summary: "Pengingat Absen Nadia",
+        date: actualSlot.date,
+        startTime: actualSlot.startTime,
+        endTime: actualSlot.endTime,
+        organizer: { name: "Syamsu", email: "bot@example.com" },
+        attendees: [{ email: "nadia@example.com", name: "Nadia" }],
+        alarmMinutes: 0,
+      },
+    ]),
+  );
+  assert.ok(zeroAlarmIcs.includes("UID:absen-2026-11-28-morning-1@tanda-pengingat.vercel.app"));
+  assert.ok(zeroAlarmIcs.includes("TRIGGER:PT0S"));
+
+  const baseHealthInput = {
+    redisOk: true,
+    redisLatencyMs: 12,
+    recipientEmail: "nadia@example.com",
+    paused: false,
+    isTodayOff: false,
+    schedule: {
+      morning: { enabled: true, time: "09:00" },
+      afternoon: { enabled: true, time: "15:00" },
+      urgent: { enabled: true, time: "21:00" },
+      updatedAt: "",
+    },
+    cronHealth: {
+      status: "healthy" as const,
+      lastPingAt: "2026-11-28T02:00:00.000Z",
+      lastPingWib: "09:00 WIB",
+      lastStatus: "skipped_not_due",
+      stageTriggered: null,
+      source: "cron-job.org",
+      minutesSinceLastPing: 3,
+    },
+    lastError: null,
+    now: new Date("2026-11-28T02:03:00.000Z"),
+  };
+
+  assert.equal(evaluateBotHealth(baseHealthInput).state, "active");
+  assert.equal(
+    evaluateBotHealth({
+      ...baseHealthInput,
+      cronHealth: { ...baseHealthInput.cronHealth, status: "delayed", minutesSinceLastPing: 15 },
+    }).state,
+    "scheduler_delayed",
+  );
+  assert.equal(
+    evaluateBotHealth({
+      ...baseHealthInput,
+      cronHealth: { ...baseHealthInput.cronHealth, status: "delayed", minutesSinceLastPing: 25 },
+    }).state,
+    "scheduler_down",
+  );
+  assert.equal(
+    evaluateBotHealth({
+      ...baseHealthInput,
+      lastError: { type: "smtp", stage: "morning", message: "Auth failed", at: "2026-11-28T09:00:00+07:00" },
+    }).state,
+    "delivery_error",
+  );
+  assert.equal(evaluateBotHealth({ ...baseHealthInput, paused: true }).state, "paused");
+  assert.equal(
+    evaluateBotHealth({
+      ...baseHealthInput,
+      schedule: {
+        morning: { enabled: false, time: "09:00" },
+        afternoon: { enabled: false, time: "15:00" },
+        urgent: { enabled: false, time: "21:00" },
+        updatedAt: "",
+      },
+    }).state,
+    "no_schedule",
+  );
+  assert.equal(evaluateBotHealth({ ...baseHealthInput, isTodayOff: true }).state, "holiday");
+
+  console.log("SEMUA VERIFIKASI TIMEZONE, 24 JAM WIB, ICS DINAMIS & FLEKSIBEL, BOT HEALTH, SANITASI HEADER/SENDER, EMAIL, BATCH UID, & KEAMANAN PIN LULUS (20/20 suite).");
 }
 
 runAllAssertions();

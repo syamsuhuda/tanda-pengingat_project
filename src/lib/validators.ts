@@ -129,7 +129,7 @@ export const triggerAttendanceSchema = z.object({
     .optional()
     .transform((val) => (val ? val : undefined)),
   useActiveMessage: z.boolean().optional().default(false),
-  includeIcs: z.boolean().default(true),
+  includeIcs: z.boolean().optional(),
   forceSend: z.boolean().default(false),
 });
 
@@ -231,6 +231,43 @@ export const scheduleConfigSchema = z
 export const resetAttendanceSchema = z.object({
   clearSentLocks: z.boolean().optional().default(false),
 });
+
+export const attendanceIcsConfigSchema = z
+  .object({
+    enabledStages: z.object({
+      morning: z.boolean(),
+      afternoon: z.boolean(),
+      urgent: z.boolean(),
+    }),
+    manualIncludeIcs: z.boolean(),
+    startOffsetMinutes: z.union([
+      z.literal(10),
+      z.literal(15),
+      z.literal(20),
+      z.literal(30),
+      z.literal(45),
+      z.literal(60),
+    ]),
+    durationMinutes: z.union([z.literal(15), z.literal(30), z.literal(60)]),
+    alarmBeforeMinutes: z.union([
+      z.literal(0),
+      z.literal(5),
+      z.literal(10),
+      z.literal(15),
+      z.literal(30),
+    ]),
+  })
+  .superRefine((data, ctx) => {
+    const bufferMinutes = data.startOffsetMinutes - data.alarmBeforeMinutes;
+    if (bufferMinutes < 5) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "Jeda antara waktu kirim dan bunyi alarm minimal 5 menit agar notifikasi Google Calendar sempat masuk di HP.",
+        path: ["alarmBeforeMinutes"],
+      });
+    }
+  });
 
 export const createContactSchema = z.object({
   name: z.string().trim().min(1, "Nama kontak wajib diisi").max(80, "Nama maksimal 80 karakter"),

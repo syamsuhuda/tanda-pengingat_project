@@ -34,6 +34,7 @@ const MAX_ICS_LINE_OCTETS = 75;
 
 export interface IcsEventInput {
   uidSeed: string;
+  uidOverride?: string;
   summary: string;
   date: string;
   startTime: string;
@@ -160,7 +161,7 @@ export function generateIcsCalendar(events: IcsEventInput[]): string {
     const range = resolveWibSessionUtcRange(event.date, event.startTime, event.endTime);
     const dtStampUtc = formatUtcDateForIcs(event.dtStamp ?? new Date());
     const organizerName = escapeIcsParamValue(sanitizeSenderDisplayName(event.organizer.name));
-    const safeAlarmMinutes = Math.max(1, Math.round(event.alarmMinutes));
+    const safeAlarmMinutes = Math.max(0, Math.round(event.alarmMinutes));
 
     const descriptionParts: string[] = [];
     if (event.description?.trim()) {
@@ -171,8 +172,12 @@ export function generateIcsCalendar(events: IcsEventInput[]): string {
     }
     const combinedDescription = descriptionParts.join("\n\n");
 
+    const eventUid = event.uidOverride?.trim()
+      ? event.uidOverride.trim()
+      : buildDeterministicUid(event.uidSeed);
+
     rawLines.push("BEGIN:VEVENT");
-    rawLines.push(`UID:${buildDeterministicUid(event.uidSeed)}`);
+    rawLines.push(`UID:${eventUid}`);
     rawLines.push(`DTSTAMP:${dtStampUtc}`);
     rawLines.push(`DTSTART:${range.dtStartUtc}`);
     rawLines.push(`DTEND:${range.dtEndUtc}`);
@@ -204,7 +209,7 @@ export function generateIcsCalendar(events: IcsEventInput[]): string {
     rawLines.push("TRANSP:OPAQUE");
     rawLines.push("BEGIN:VALARM");
     rawLines.push("ACTION:DISPLAY");
-    rawLines.push(`TRIGGER:-PT${safeAlarmMinutes}M`);
+    rawLines.push(safeAlarmMinutes === 0 ? "TRIGGER:PT0S" : `TRIGGER:-PT${safeAlarmMinutes}M`);
     rawLines.push(`DESCRIPTION:${escapeIcsText(`Pengingat: ${event.summary}`)}`);
     rawLines.push("END:VALARM");
     rawLines.push("END:VEVENT");

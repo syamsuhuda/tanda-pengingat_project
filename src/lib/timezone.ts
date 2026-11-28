@@ -431,3 +431,44 @@ export function getManualAttendanceSlot(now: Date = new Date()): {
     endTime: `${pad2(Math.floor(effectiveEnd / 60))}:${pad2(effectiveEnd % 60)}`,
   };
 }
+
+export function resolveActualSendCalendarSlot(
+  now: Date = new Date(),
+  startOffsetMinutes = 15,
+  durationMinutes = 30,
+): {
+  date: string;
+  startTime: string;
+  endTime: string;
+  dtStartUtc: string;
+  dtEndUtc: string;
+  actualSendHm: string;
+} {
+  const p = getWibDateParts(now);
+  const today = `${p.year}-${pad2(p.month)}-${pad2(p.day)}`;
+  // Bulatkan ke menit penuh berikutnya bila detik > 0 agar slot tidak tertinggal di menit berjalan.
+  const baseMinutes = p.hour * 60 + p.minute + (p.second > 0 ? 1 : 0);
+  const actualDayOffset = Math.floor(baseMinutes / 1440);
+  const actualMinOfDay = baseMinutes % 1440;
+  const actualSendHm = `${pad2(Math.floor(actualMinOfDay / 60))}:${pad2(actualMinOfDay % 60)}`;
+
+  const startTotalMinutes = baseMinutes + Math.max(0, startOffsetMinutes);
+  const startDayOffset = Math.floor(startTotalMinutes / 1440);
+  const startMinOfDay = startTotalMinutes % 1440;
+  const slotDate = startDayOffset > 0 ? shiftYmdDate(today, startDayOffset) : today;
+  const startTime = `${pad2(Math.floor(startMinOfDay / 60))}:${pad2(startMinOfDay % 60)}`;
+  const endTime = addMinutesToHmTime(startTime, durationMinutes);
+  const range = resolveWibSessionUtcRange(slotDate, startTime, endTime);
+
+  // Pastikan actualDayOffset tetap terhitung walau tidak dipakai di return.
+  void actualDayOffset;
+
+  return {
+    date: slotDate,
+    startTime,
+    endTime,
+    dtStartUtc: range.dtStartUtc,
+    dtEndUtc: range.dtEndUtc,
+    actualSendHm,
+  };
+}

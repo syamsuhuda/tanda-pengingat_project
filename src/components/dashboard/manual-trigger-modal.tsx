@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AlertCircle, Mail, Send, X } from "lucide-react";
+import type { AttendanceIcsConfig } from "@/lib/types";
 
 interface ManualTriggerModalProps {
   open: boolean;
@@ -11,6 +12,7 @@ interface ManualTriggerModalProps {
   defaultSenderName: string;
   isAlreadyConfirmed: boolean;
   activeCustomMessage: string | null;
+  icsConfig: AttendanceIcsConfig;
   onClose: () => void;
   onSent: () => Promise<void>;
 }
@@ -23,6 +25,7 @@ export function ManualTriggerModal({
   defaultSenderName,
   isAlreadyConfirmed,
   activeCustomMessage,
+  icsConfig,
   onClose,
   onSent,
 }: ManualTriggerModalProps) {
@@ -31,7 +34,7 @@ export function ManualTriggerModal({
   const [overrideSenderOpen, setOverrideSenderOpen] = useState(false);
   const [senderOverride, setSenderOverride] = useState(defaultSenderName);
   const [senderTouched, setSenderTouched] = useState(false);
-  const [includeIcs, setIncludeIcs] = useState(true);
+  const [includeIcs, setIncludeIcs] = useState(icsConfig.manualIncludeIcs);
   const [forceSend, setForceSend] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{
@@ -51,11 +54,12 @@ export function ManualTriggerModal({
       setOverrideSenderOpen(false);
       setSenderOverride(defaultSenderName);
       setSenderTouched(false);
+      setIncludeIcs(icsConfig.manualIncludeIcs);
       setNote(activeCustomMessage ?? "");
       setNoteTouched(false);
     }
     wasOpenRef.current = open;
-  }, [open, activeCustomMessage, defaultSenderName]);
+  }, [open, activeCustomMessage, defaultSenderName, icsConfig.manualIncludeIcs]);
 
   useEffect(() => {
     if (open && !noteTouched) {
@@ -225,16 +229,24 @@ export function ManualTriggerModal({
 
           <label
             htmlFor="modal-include-ics"
-            className="flex min-h-[44px] items-center gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3.5 py-2.5 text-sm text-[var(--ink)]"
+            className="flex min-h-[44px] items-start gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3.5 py-2.5 text-sm text-[var(--ink)]"
           >
             <input
               id="modal-include-ics"
               type="checkbox"
               checked={includeIcs}
               onChange={(event) => setIncludeIcs(event.target.checked)}
-              className="h-5 w-5 shrink-0 accent-[var(--accent)]"
+              className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--accent)]"
             />
-            <span>Sertakan undangan kalender &amp; tombol Google Calendar</span>
+            <div>
+              <span>Sertakan undangan kalender &amp; tombol Google Calendar</span>
+              <span className="font-mono-num mt-0.5 block text-[11px] text-[var(--ink-muted)]">
+                Mulai +{icsConfig.startOffsetMinutes}m · Durasi {icsConfig.durationMinutes}m · Alarm{" "}
+                {icsConfig.alarmBeforeMinutes === 0
+                  ? "saat mulai"
+                  : `${icsConfig.alarmBeforeMinutes}m sebelum`}
+              </span>
+            </div>
           </label>
 
           <div>

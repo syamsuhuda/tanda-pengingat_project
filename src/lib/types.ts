@@ -57,6 +57,66 @@ export interface AttendanceScheduleConfig {
   updatedAt: string;
 }
 
+export type IcsStartOffsetMinutes = 10 | 15 | 20 | 30 | 45 | 60;
+export type IcsDurationMinutes = 15 | 30 | 60;
+export type IcsAlarmBeforeMinutes = 0 | 5 | 10 | 15 | 30;
+
+export interface AttendanceIcsConfig {
+  enabledStages: {
+    morning: boolean;
+    afternoon: boolean;
+    urgent: boolean;
+  };
+  manualIncludeIcs: boolean;
+  startOffsetMinutes: IcsStartOffsetMinutes;
+  durationMinutes: IcsDurationMinutes;
+  alarmBeforeMinutes: IcsAlarmBeforeMinutes;
+  updatedAt: string;
+}
+
+export type BotHealthState =
+  | "offline"
+  | "config_error"
+  | "paused"
+  | "no_schedule"
+  | "delivery_error"
+  | "scheduler_down"
+  | "scheduler_delayed"
+  | "holiday"
+  | "active";
+
+export type BotHealthSeverity = "ok" | "warning" | "error";
+
+export interface BotHealthErrorRecord {
+  type: "smtp" | "cron" | "config";
+  message: string;
+  stage?: string;
+  at: string;
+}
+
+export interface BotHealthCheckItem {
+  ok: boolean;
+  status: "ok" | "warning" | "error";
+  label: string;
+  detail: string;
+}
+
+export interface BotHealthSummary {
+  state: BotHealthState;
+  label: string;
+  severity: BotHealthSeverity;
+  summary: string;
+  detail: string;
+  checkedAt: string;
+  checks: {
+    redis: BotHealthCheckItem & { latencyMs?: number | null };
+    env: BotHealthCheckItem;
+    scheduler: BotHealthCheckItem;
+    delivery: BotHealthCheckItem;
+    schedule: BotHealthCheckItem;
+  };
+}
+
 export interface FriendContact {
   id: string;
   name: string;
@@ -79,6 +139,8 @@ export type ActivityLogType =
   | "message_updated"
   | "off_days_updated"
   | "schedule_updated"
+  | "ics_config_updated"
+  | "health_checked"
   | "itinerary_sent"
   | "contact_updated"
   | "pin_updated"
@@ -171,10 +233,12 @@ export interface DashboardStatusData {
   todayOffDay: TodayOffDayStatus;
   upcomingOffDays: OffDayEntry[];
   schedule: AttendanceScheduleConfig;
+  icsConfig: AttendanceIcsConfig;
   attendance: AttendanceStatusRecord | null;
   timeline: TimelineStageItem[];
   pauseConfig: BotPauseConfig;
   cronHealth: CronHealthSummary;
+  botHealth: BotHealthSummary;
   logs: ActivityLogEntry[];
 }
 
