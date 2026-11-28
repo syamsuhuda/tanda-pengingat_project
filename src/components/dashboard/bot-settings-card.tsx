@@ -793,7 +793,7 @@ export function BotSettingsCard({
                       htmlFor="ics-start-offset"
                       className="block text-[11px] font-semibold text-[var(--ink)]"
                     >
-                      Mulai Acara
+                      Mulai (stlh kirim)
                     </label>
                     <select
                       id="ics-start-offset"
@@ -818,7 +818,7 @@ export function BotSettingsCard({
                     >
                       {ICS_START_OFFSETS.map((m) => (
                         <option key={m} value={m}>
-                          +{m} mnt setelah kirim
+                          +{m} mnt
                         </option>
                       ))}
                     </select>

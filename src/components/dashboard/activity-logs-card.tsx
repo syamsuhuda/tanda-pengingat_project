@@ -6,6 +6,7 @@ import type { ActivityLogEntry, ActivityLogType } from "@/lib/types";
 
 interface ActivityLogsCardProps {
   logs: ActivityLogEntry[];
+  className?: string;
 }
 
 type LogFilter = "all" | "attendance" | "dispatch";
@@ -54,7 +55,7 @@ const RESULT_BADGE: Record<
   },
 };
 
-export function ActivityLogsCard({ logs }: ActivityLogsCardProps) {
+export function ActivityLogsCard({ logs, className = "" }: ActivityLogsCardProps) {
   const [filter, setFilter] = useState<LogFilter>("all");
 
   const filteredLogs = useMemo(() => {
@@ -65,9 +66,9 @@ export function ActivityLogsCard({ logs }: ActivityLogsCardProps) {
   return (
     <section
       aria-labelledby="activity-logs-heading"
-      className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-xs sm:p-6"
+      className={`flex flex-col rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-xs sm:p-6 ${className}`}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
         <div className="flex items-baseline gap-2">
           <h2
             id="activity-logs-heading"
@@ -105,42 +106,44 @@ export function ActivityLogsCard({ logs }: ActivityLogsCardProps) {
       </div>
 
       {filteredLogs.length === 0 ? (
-        <div className="mt-4 rounded-xl border border-dashed border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-5 text-center text-xs text-[var(--ink-muted)]">
+        <div className="mt-3 flex flex-1 min-h-[200px] items-center justify-center rounded-xl border border-dashed border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-5 text-center text-xs text-[var(--ink-muted)]">
           {logs.length === 0
             ? "Belum ada aktivitas tercatat. Riwayat cron, konfirmasi, dan undangan akan muncul di sini."
             : "Belum ada aktivitas pada filter ini."}
         </div>
       ) : (
-        <ul className="custom-scrollbar mt-4 max-h-[280px] space-y-2 overflow-y-auto overscroll-contain pr-1.5 sm:max-h-[360px]">
-          {filteredLogs.map((entry) => {
-            const category = getLogCategory(entry.type);
-            const badge = RESULT_BADGE[entry.result];
-            return (
-              <li
-                key={entry.id}
-                className="relative rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] py-2.5 pr-3 pl-7"
-              >
-                <span
-                  aria-hidden="true"
-                  className={`absolute top-3.5 left-3 h-2 w-2 rounded-full ${DOT_COLOR_BY_CAT[category]}`}
-                />
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono-num text-[11px] text-[var(--ink-muted)]">
-                    {formatIsoToWibDateTime(entry.timestamp)}
-                  </span>
+        <div className="relative mt-3 min-h-[240px] flex-1">
+          <ul className="custom-scrollbar max-h-[360px] space-y-2 overflow-y-auto overscroll-contain pr-1 lg:absolute lg:inset-0 lg:max-h-none">
+            {filteredLogs.map((entry) => {
+              const category = getLogCategory(entry.type);
+              const badge = RESULT_BADGE[entry.result];
+              return (
+                <li
+                  key={entry.id}
+                  className="relative rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-3 pl-7"
+                >
                   <span
-                    className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold ${badge.className}`}
-                  >
-                    {badge.label}
-                  </span>
-                </div>
-                <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-[var(--ink)]">
-                  {entry.summary}
-                </p>
-              </li>
-            );
-          })}
-        </ul>
+                    aria-hidden="true"
+                    className={`absolute top-3.5 left-3 h-2 w-2 rounded-full ${DOT_COLOR_BY_CAT[category]}`}
+                  />
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono-num text-[11px] text-[var(--ink-muted)]">
+                      {formatIsoToWibDateTime(entry.timestamp)}
+                    </span>
+                    <span
+                      className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold ${badge.className}`}
+                    >
+                      {badge.label}
+                    </span>
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-[var(--ink)]">
+                    {entry.summary}
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       )}
     </section>
   );

@@ -10,6 +10,7 @@ interface OffDaysCardProps {
   tomorrowWib: string;
   upcomingOffDays: OffDayEntry[];
   onChanged: () => Promise<void>;
+  className?: string;
 }
 
 export function OffDaysCard({
@@ -17,6 +18,7 @@ export function OffDaysCard({
   tomorrowWib,
   upcomingOffDays,
   onChanged,
+  className = "",
 }: OffDaysCardProps) {
   const [formOpen, setFormOpen] = useState(false);
   const [dateInput, setDateInput] = useState(tomorrowWib);
@@ -116,7 +118,7 @@ export function OffDaysCard({
   return (
     <section
       aria-labelledby="off-days-heading"
-      className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-xs sm:p-6"
+      className={`rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-xs sm:p-6 ${className}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div>

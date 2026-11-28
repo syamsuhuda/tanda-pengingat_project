@@ -13,6 +13,7 @@ import {
   ChevronDown,
   Clock,
   Copy,
+  Mail,
   Pause,
   PauseCircle,
   Play,
@@ -552,7 +553,7 @@ export function AttendanceTab({
               ) : null}
             </div>
 
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div className="grid grid-cols-1 items-stretch gap-2.5 sm:grid-cols-3">
               {data.timeline.map((item) => {
                 const badge = TIMELINE_META[item.status];
                 const isNextStage =
@@ -560,18 +561,19 @@ export function AttendanceTab({
                   !isTodayOff &&
                   !pauseDraft &&
                   nextWaitingStage?.stage === item.stage;
+                const hasIcs = data.icsConfig.enabledStages[item.stage];
 
                 return (
                   <div
                     key={item.stage}
-                    className={`flex items-center justify-between gap-2 rounded-xl border px-3.5 py-2.5 sm:flex-col sm:items-start sm:gap-1.5 ${
+                    className={`flex h-full min-w-0 flex-col justify-between rounded-2xl border p-3.5 ${
                       isNextStage
                         ? "border-[var(--accent)]/60 bg-[var(--accent-tint)]/45"
                         : "border-[var(--border-subtle)] bg-[var(--surface-elevated)]"
                     }`}
                   >
-                    <div>
-                      <p className="font-mono-num flex items-center gap-1.5 text-xs font-bold text-[var(--ink)]">
+                    <div className="min-w-0">
+                      <p className="font-mono-num flex items-center gap-1.5 whitespace-nowrap text-xs font-bold text-[var(--ink)]">
                         {isNextStage ? (
                           <span
                             className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--accent)]"
@@ -580,43 +582,51 @@ export function AttendanceTab({
                         ) : null}
                         <span>{item.scheduledTimeWib}</span>
                       </p>
-                      <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--ink-muted)]">
-                        <span>
-                          {item.stage === "morning"
-                            ? "Pagi"
-                            : item.stage === "afternoon"
-                              ? "Cek Siang / Sore"
-                              : "Urgent + Alert"}
-                        </span>
-                        {data.icsConfig.enabledStages[item.stage] ? (
-                          <span className="inline-flex items-center gap-0.5 rounded bg-[var(--accent-tint)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--accent)]">
-                            <Calendar className="h-2.5 w-2.5" strokeWidth={2} aria-hidden="true" />
-                            <span>+ Kalender</span>
-                          </span>
-                        ) : null}
+                      <p className="mt-0.5 truncate whitespace-nowrap text-xs text-[var(--ink-muted)]">
+                        {item.stage === "morning"
+                          ? "Pagi"
+                          : item.stage === "afternoon"
+                            ? "Cek Siang / Sore"
+                            : "Urgent + Alert"}
                       </p>
                     </div>
 
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold ${badge.className}`}
-                    >
-                      {item.status === "sent" ? (
-                        <Check className="h-3 w-3" strokeWidth={2.2} aria-hidden="true" />
-                      ) : item.status === "missed" ? (
-                        <AlertTriangle className="h-3 w-3" strokeWidth={2.2} aria-hidden="true" />
-                      ) : item.status === "paused" ? (
-                        <PauseCircle className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
-                      ) : item.status === "off_day" ? (
-                        <CalendarOff className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
-                      ) : item.status === "disabled" ? (
-                        <BellOff className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
-                      ) : item.status === "cancelled" ? (
-                        <Ban className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
+                    <div className="mt-2.5 flex min-h-[24px] items-center">
+                      {hasIcs ? (
+                        <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-[var(--accent-tint)] px-2 py-0.5 text-[11px] font-medium text-[var(--accent)]">
+                          <Calendar className="h-3 w-3 shrink-0" strokeWidth={2} aria-hidden="true" />
+                          <span>+ Kalender</span>
+                        </span>
                       ) : (
-                        <Clock className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
+                        <span className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] text-[var(--ink-muted)]/85">
+                          <Mail className="h-3 w-3 shrink-0 opacity-75" strokeWidth={1.8} aria-hidden="true" />
+                          <span>Email saja</span>
+                        </span>
                       )}
-                      <span>{badge.label}</span>
-                    </span>
+                    </div>
+
+                    <div className="mt-auto flex items-center pt-3">
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold ${badge.className}`}
+                      >
+                        {item.status === "sent" ? (
+                          <Check className="h-3 w-3" strokeWidth={2.2} aria-hidden="true" />
+                        ) : item.status === "missed" ? (
+                          <AlertTriangle className="h-3 w-3" strokeWidth={2.2} aria-hidden="true" />
+                        ) : item.status === "paused" ? (
+                          <PauseCircle className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
+                        ) : item.status === "off_day" ? (
+                          <CalendarOff className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
+                        ) : item.status === "disabled" ? (
+                          <BellOff className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
+                        ) : item.status === "cancelled" ? (
+                          <Ban className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
+                        ) : (
+                          <Clock className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
+                        )}
+                        <span>{badge.label}</span>
+                      </span>
+                    </div>
                   </div>
                 );
               })}
@@ -833,38 +843,46 @@ export function AttendanceTab({
         ) : null}
       </section>
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:items-start">
-        <div className="space-y-5 lg:col-span-6">
-          <CustomMessageCard
-            customMessage={data.customMessage}
-            recipientName={data.recipient.name}
-            onChanged={onRefresh}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:items-stretch">
+        <div className="flex flex-col gap-5 lg:col-span-6">
+          <div className="shrink-0">
+            <CustomMessageCard
+              customMessage={data.customMessage}
+              recipientName={data.recipient.name}
+              onChanged={onRefresh}
+            />
+          </div>
+
+          <ActivityLogsCard
+            logs={data.logs}
+            className="flex min-h-[320px] flex-1 flex-col"
           />
+        </div>
+
+        <div className="flex flex-col gap-5 lg:col-span-6">
+          <div className="shrink-0">
+            <BotSettingsCard
+              recipient={data.recipient}
+              senderName={data.senderName}
+              schedule={data.schedule}
+              icsConfig={data.icsConfig}
+              botHealth={effectiveBotHealth}
+              cronHealth={data.cronHealth}
+              checkingNow={healthCheckBusy || checkingNow}
+              onCheckNow={handleRunHealthCheck}
+              onOpenCronGuide={() => setCronGuideOpen(true)}
+              onRecipientUpdated={onRecipientUpdated}
+              onConfigChanged={onRefresh}
+            />
+          </div>
 
           <OffDaysCard
             todayWib={data.todayWib}
             tomorrowWib={data.tomorrowWib}
             upcomingOffDays={data.upcomingOffDays}
             onChanged={onRefresh}
+            className="flex flex-col lg:flex-1"
           />
-        </div>
-
-        <div className="space-y-5 lg:col-span-6">
-          <BotSettingsCard
-            recipient={data.recipient}
-            senderName={data.senderName}
-            schedule={data.schedule}
-            icsConfig={data.icsConfig}
-            botHealth={effectiveBotHealth}
-            cronHealth={data.cronHealth}
-            checkingNow={healthCheckBusy || checkingNow}
-            onCheckNow={handleRunHealthCheck}
-            onOpenCronGuide={() => setCronGuideOpen(true)}
-            onRecipientUpdated={onRecipientUpdated}
-            onConfigChanged={onRefresh}
-          />
-
-          <ActivityLogsCard logs={data.logs} />
         </div>
       </div>
 
