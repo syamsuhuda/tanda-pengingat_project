@@ -29,7 +29,12 @@ import { CustomMessageCard } from "@/components/dashboard/custom-message-card";
 import { ManualTriggerModal } from "@/components/dashboard/manual-trigger-modal";
 import { OffDaysCard } from "@/components/dashboard/off-days-card";
 import type { LiveConnectionState } from "@/hooks/useLiveDashboardStatus";
-import { formatHmTimeWibLabel, formatIsoToWibTime } from "@/lib/timezone";
+import {
+  formatHmTimeWibLabel,
+  formatIsoToWibTime,
+  getCurrentWibMinutes,
+  hmTimeToMinutes,
+} from "@/lib/timezone";
 import type {
   ActiveRecipientConfig,
   BotHealthSummary,
@@ -115,6 +120,15 @@ export function AttendanceTab({
   const [liveBotHealthOverride, setLiveBotHealthOverride] = useState<BotHealthSummary | null>(null);
   const [cronGuideOpen, setCronGuideOpen] = useState(false);
   const [copiedCronUrl, setCopiedCronUrl] = useState(false);
+  const [nowWibMinutes, setNowWibMinutes] = useState(() => getCurrentWibMinutes());
+
+  useEffect(() => {
+    setNowWibMinutes(getCurrentWibMinutes());
+    const interval = window.setInterval(() => {
+      setNowWibMinutes(getCurrentWibMinutes());
+    }, 30_000);
+    return () => window.clearInterval(interval);
+  }, [data.nowWibIso]);
 
   useEffect(() => {
     setPauseDraft(data.pauseConfig.paused);
@@ -202,6 +216,42 @@ export function AttendanceTab({
     .join(", ");
 
   const nextWaitingStage = data.timeline.find((item) => item.status === "waiting");
+
+  const enabledStagesCount = data.timeline.filter((item) => item.status !== "disabled").length;
+  const sentStagesCount = data.timeline.filter((item) => item.status === "sent").length;
+
+  const nextScheduleCountdownText = (() => {
+    if (isConfirmed || isTodayOff) {
+      return "Pengingat berhenti sampai besok";
+    }
+    if (pauseDraft) {
+      return "Dijeda manual";
+    }
+    if (!nextWaitingStage) {
+      return "Semua jadwal hari ini selesai";
+    }
+    const targetMinutes = hmTimeToMinutes(data.schedule[nextWaitingStage.stage].time);
+    const diff = targetMinutes - nowWibMinutes;
+    if (diff <= 0) {
+      return "Dalam jendela kirim";
+    }
+    const hours = Math.floor(diff / 60);
+    const mins = diff % 60;
+    if (hours === 0) {
+      return `${mins} mnt lagi`;
+    }
+    return mins === 0 ? `±${hours} jam lagi` : `±${hours} jam ${mins} mnt lagi`;
+  })();
+
+  function scrollToCustomMessage() {
+    const el = document.getElementById("custom-message-textarea");
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (el instanceof HTMLTextAreaElement) {
+        el.focus({ preventScroll: true });
+      }
+    }
+  }
 
   async function handleManualConfirmToday() {
     setConfirmingManual(true);
@@ -458,10 +508,10 @@ export function AttendanceTab({
 
       <section
         aria-labelledby="today-status-heading"
-        className={`rounded-2xl border bg-[var(--surface)] p-5 shadow-xs sm:p-6 ${heroBorderClass}`}
+        className={`rounded-2xl border bg-[var(--surface)] p-4 shadow-xs sm:p-5 ${heroBorderClass}`}
       >
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-          <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-stretch lg:gap-5">
+          <div className="flex h-full flex-col justify-between gap-4 lg:col-span-7">
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
@@ -483,7 +533,7 @@ export function AttendanceTab({
               </span>
             </div>
 
-            <div className="flex items-center gap-3.5 pt-0.5">
+            <div className="flex items-center gap-3.5">
               {isConfirmed ? (
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--success-bg)] text-[var(--success-fg)]">
                   <CheckCircle2 className="h-6 w-6" strokeWidth={2} aria-hidden="true" />
@@ -532,9 +582,75 @@ export function AttendanceTab({
                 </p>
               </div>
             </div>
+
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)]/65 px-3.5 py-2.5 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="flex items-center gap-1" aria-hidden="true">
+                  {data.timeline.map((item) => {
+                    const isNext =
+                      !isConfirmed &&
+                      !isTodayOff &&
+                      !pauseDraft &&
+                      nextWaitingStage?.stage === item.stage;
+                    const segClass =
+                      item.status === "sent"
+                        ? "bg-emerald-500"
+                        : isNext
+                          ? "bg-[var(--accent)]"
+                          : item.status === "missed"
+                            ? "bg-rose-500"
+                            : "bg-[var(--ink-muted)]/35";
+                    return (
+                      <span
+                        key={item.stage}
+                        className={`h-1.5 w-3.5 rounded-full ${segClass}`}
+                      />
+                    );
+                  })}
+                </span>
+                <span className="font-mono-num font-semibold text-[var(--ink)]">
+                  {isConfirmed
+                    ? "Selesai hari ini"
+                    : isTodayOff
+                      ? "Jadwal libur aktif"
+                      : `${sentStagesCount}/${enabledStagesCount} terkirim`}
+                </span>
+              </div>
+
+              <span className="hidden h-3.5 w-px bg-[var(--border-subtle)] sm:inline-block" aria-hidden="true" />
+
+              <span className="font-mono-num text-[var(--ink-muted)]">
+                {nextScheduleCountdownText}
+              </span>
+
+              <span className="hidden h-3.5 w-px bg-[var(--border-subtle)] sm:inline-block" aria-hidden="true" />
+
+              <button
+                type="button"
+                onClick={scrollToCustomMessage}
+                className="inline-flex items-center gap-1.5 font-medium transition-colors hover:underline"
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    data.customMessage ? "bg-[var(--accent)]" : "bg-[var(--ink-muted)]/45"
+                  }`}
+                  aria-hidden="true"
+                />
+                {data.customMessage ? (
+                  <span className="text-[var(--ink)]">
+                    Catatan aktif{" "}
+                    <span className="text-[var(--ink-muted)]">
+                      ({data.customMessage.scope === "always" ? "Pakai terus" : "Hari ini"})
+                    </span>
+                  </span>
+                ) : (
+                  <span className="text-[var(--ink-muted)]">Tanpa catatan</span>
+                )}
+              </button>
+            </div>
           </div>
 
-          <div className="space-y-2 lg:w-[460px]">
+          <div className="flex flex-col justify-between space-y-2 lg:col-span-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-[11px] font-semibold text-[var(--ink-muted)]">
                 Rangkaian Pengingat Hari Ini
@@ -553,7 +669,7 @@ export function AttendanceTab({
               ) : null}
             </div>
 
-            <div className="grid grid-cols-1 items-stretch gap-2.5 sm:grid-cols-3">
+            <div className="grid flex-1 grid-cols-1 items-stretch gap-2.5 sm:grid-cols-3">
               {data.timeline.map((item) => {
                 const badge = TIMELINE_META[item.status];
                 const isNextStage =
@@ -566,7 +682,7 @@ export function AttendanceTab({
                 return (
                   <div
                     key={item.stage}
-                    className={`flex h-full min-w-0 flex-col justify-between rounded-2xl border p-3.5 ${
+                    className={`flex h-full min-w-0 flex-col justify-between rounded-2xl border p-3 ${
                       isNextStage
                         ? "border-[var(--accent)]/60 bg-[var(--accent-tint)]/45"
                         : "border-[var(--border-subtle)] bg-[var(--surface-elevated)]"
@@ -591,7 +707,7 @@ export function AttendanceTab({
                       </p>
                     </div>
 
-                    <div className="mt-2.5 flex min-h-[24px] items-center">
+                    <div className="mt-2 flex min-h-[24px] items-center">
                       {hasIcs ? (
                         <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-[var(--accent-tint)] px-2 py-0.5 text-[11px] font-medium text-[var(--accent)]">
                           <Calendar className="h-3 w-3 shrink-0" strokeWidth={2} aria-hidden="true" />
@@ -605,7 +721,7 @@ export function AttendanceTab({
                       )}
                     </div>
 
-                    <div className="mt-auto flex items-center pt-3">
+                    <div className="mt-auto flex items-center pt-2.5">
                       <span
                         className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold ${badge.className}`}
                       >
@@ -704,7 +820,7 @@ export function AttendanceTab({
           </div>
         ) : null}
 
-        <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-[var(--border-subtle)] pt-4">
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[var(--border-subtle)] pt-4">
           <button
             type="button"
             onClick={() => setManualModalOpen(true)}
