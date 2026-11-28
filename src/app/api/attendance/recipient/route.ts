@@ -22,8 +22,14 @@ export async function PATCH(request: Request) {
     }
 
     const recipient = await setActiveRecipient(parsed.data);
+    const channelText =
+      recipient.channel === "both"
+        ? "Email + WhatsApp"
+        : recipient.channel === "whatsapp"
+          ? "WhatsApp"
+          : "Email";
     return jsonOk(
-      `Penerima aktif diperbarui ke ${recipient.name} (${recipient.email}).`,
+      `Penerima aktif diperbarui ke ${recipient.name} (kanal: ${channelText}).`,
       recipient,
     );
   } catch (error) {

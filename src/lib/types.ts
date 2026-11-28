@@ -14,9 +14,13 @@ export interface BotPauseConfig {
   note?: string;
 }
 
+export type NotificationChannel = "email" | "whatsapp" | "both";
+
 export interface ActiveRecipientConfig {
   name: string;
   email: string;
+  whatsapp?: string;
+  channel?: NotificationChannel;
   updatedAt: string;
 }
 
@@ -121,6 +125,7 @@ export interface FriendContact {
   id: string;
   name: string;
   email: string;
+  whatsapp?: string;
   group: string;
   createdAt: string;
 }

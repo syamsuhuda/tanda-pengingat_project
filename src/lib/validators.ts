@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { hmTimeToMinutes, isValidHmTime, isValidYmdDate } from "./timezone";
+import { isValidIndonesianPhone, normalizeIndonesianPhone } from "./whatsapp";
 
 export const ymdDateSchema = z
   .string()
@@ -29,6 +30,42 @@ const optionalMapsUrlSchema = z
   )
   .optional()
   .transform((val) => (val ? val : undefined));
+
+export const optionalIndonesianPhoneSchema = z
+  .string()
+  .trim()
+  .max(30, "Nomor WhatsApp terlalu panjang")
+  .optional()
+  .transform((val) => {
+    if (!val) return undefined;
+    const normalized = normalizeIndonesianPhone(val);
+    return normalized || undefined;
+  })
+  .refine(
+    (normalized) => !normalized || isValidIndonesianPhone(normalized),
+    "Format nomor WhatsApp harus valid (awalan 08xxx atau 628xxx, 10-15 digit)",
+  );
+
+export const notificationChannelSchema = z.enum(["email", "whatsapp", "both"]);
+
+export const whatsappTestSchema = z.object({
+  to: z
+    .string()
+    .trim()
+    .min(1, "Nomor WhatsApp tujuan wajib diisi")
+    .max(30, "Nomor WhatsApp terlalu panjang")
+    .transform((val) => normalizeIndonesianPhone(val))
+    .refine(
+      (normalized) => isValidIndonesianPhone(normalized),
+      "Format nomor WhatsApp harus valid (awalan 08xxx atau 628xxx, 10-15 digit)",
+    ),
+  message: z
+    .string()
+    .trim()
+    .max(500, "Pesan tes maksimal 500 karakter")
+    .optional()
+    .transform((val) => (val ? val : undefined)),
+});
 
 export const strictSixDigitPinSchema = z
   .string()
@@ -130,6 +167,7 @@ export const triggerAttendanceSchema = z.object({
     .transform((val) => (val ? val : undefined)),
   useActiveMessage: z.boolean().optional().default(false),
   includeIcs: z.boolean().optional(),
+  channel: notificationChannelSchema.optional(),
   forceSend: z.boolean().default(false),
 });
 
@@ -143,14 +181,26 @@ export const pauseConfigSchema = z.object({
     .transform((val) => (val ? val : undefined)),
 });
 
-export const recipientConfigSchema = z.object({
-  name: z
-    .string()
-    .trim()
-    .min(1, "Nama pasangan wajib diisi")
-    .max(60, "Nama pasangan maksimal 60 karakter"),
-  email: z.string().trim().email("Format email pasangan tidak valid").max(160),
-});
+export const recipientConfigSchema = z
+  .object({
+    name: z
+      .string()
+      .trim()
+      .min(1, "Nama pasangan wajib diisi")
+      .max(60, "Nama pasangan maksimal 60 karakter"),
+    email: z.string().trim().email("Format email pasangan tidak valid").max(160),
+    whatsapp: optionalIndonesianPhoneSchema,
+    channel: notificationChannelSchema.optional().default("email"),
+  })
+  .superRefine((data, ctx) => {
+    if ((data.channel === "whatsapp" || data.channel === "both") && !data.whatsapp) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Nomor WhatsApp wajib diisi jika kanal WhatsApp atau Keduanya dipilih.",
+        path: ["whatsapp"],
+      });
+    }
+  });
 
 export const senderConfigSchema = z.object({
   name: z
@@ -272,6 +322,7 @@ export const attendanceIcsConfigSchema = z
 export const createContactSchema = z.object({
   name: z.string().trim().min(1, "Nama kontak wajib diisi").max(80, "Nama maksimal 80 karakter"),
   email: z.string().trim().email("Format email tidak valid").max(160),
+  whatsapp: optionalIndonesianPhoneSchema,
   group: z
     .string()
     .trim()
@@ -284,10 +335,15 @@ export const updateContactSchema = z
   .object({
     name: z.string().trim().min(1, "Nama kontak wajib diisi").max(80).optional(),
     email: z.string().trim().email("Format email tidak valid").max(160).optional(),
+    whatsapp: optionalIndonesianPhoneSchema,
     group: z.string().trim().min(1, "Nama grup wajib diisi").max(50).optional(),
   })
   .refine(
-    (data) => data.name !== undefined || data.email !== undefined || data.group !== undefined,
+    (data) =>
+      data.name !== undefined ||
+      data.email !== undefined ||
+      data.whatsapp !== undefined ||
+      data.group !== undefined,
     "Minimal satu field harus diubah",
   );
 
@@ -351,6 +407,22 @@ export const sendItinerarySchema = z
       .max(180, "Subjek maksimal 180 karakter"),
     alarmMinutes: z.union([z.literal(15), z.literal(30), z.literal(60)]).default(30),
     icsMode: z.enum(["combined", "separate"]).default("combined"),
+    channel: notificationChannelSchema.optional().default("email"),
+    manualWhatsApps: z
+      .array(
+        z
+          .string()
+          .trim()
+          .max(30)
+          .transform((val) => normalizeIndonesianPhone(val))
+          .refine(
+            (normalized) => isValidIndonesianPhone(normalized),
+            "Salah satu nomor WhatsApp manual tidak valid (gunakan 08xxx atau 628xxx)",
+          ),
+      )
+      .max(30)
+      .optional()
+      .default([]),
     sessions: z
       .array(itinerarySessionSchema)
       .min(1, "Minimal harus ada 1 sesi acara")

@@ -1007,6 +1007,8 @@ export function AttendanceTab({
         todayWib={data.todayWib}
         recipientName={data.recipient.name}
         recipientEmail={data.recipient.email}
+        recipientWhatsapp={data.recipient.whatsapp}
+        recipientChannel={data.recipient.channel}
         defaultSenderName={data.senderName}
         isAlreadyConfirmed={isConfirmed}
         activeCustomMessage={data.customMessage?.message ?? null}

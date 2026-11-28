@@ -13,6 +13,7 @@ import {
 } from "./security";
 import { sanitizeHealthErrorMessage } from "./bot-health";
 import { getNowWibIso, getNowWibTimeLabel, isValidHmTime, isValidYmdDate } from "./timezone";
+import { isValidIndonesianPhone, normalizeIndonesianPhone } from "./whatsapp";
 import type {
   ActivePinConfig,
   ActiveRecipientConfig,
@@ -35,6 +36,7 @@ import type {
   IcsAlarmBeforeMinutes,
   IcsDurationMinutes,
   IcsStartOffsetMinutes,
+  NotificationChannel,
   OffDayEntry,
   OtpPurpose,
   ResetOtpRecord,
@@ -252,6 +254,21 @@ export async function setBotPauseConfig(
   return config;
 }
 
+function normalizeStoredChannel(raw: unknown): NotificationChannel {
+  if (raw === "email" || raw === "whatsapp" || raw === "both") {
+    return raw;
+  }
+  return "email";
+}
+
+function normalizeStoredWhatsApp(raw: unknown): string | undefined {
+  if (typeof raw !== "string" || !raw.trim()) {
+    return undefined;
+  }
+  const normalized = normalizeIndonesianPhone(raw);
+  return isValidIndonesianPhone(normalized) ? normalized : undefined;
+}
+
 export async function getActiveRecipient(): Promise<ActiveRecipientConfig> {
   const env = getEnv();
   const redis = getRedis();
@@ -265,9 +282,13 @@ export async function getActiveRecipient(): Promise<ActiveRecipientConfig> {
     typeof parsed.email === "string" &&
     parsed.email.trim().length > 0
   ) {
+    const whatsapp = normalizeStoredWhatsApp(parsed.whatsapp);
+    const channel = normalizeStoredChannel(parsed.channel);
     return {
       name: parsed.name.trim(),
       email: parsed.email.trim().toLowerCase(),
+      ...(whatsapp ? { whatsapp } : {}),
+      channel,
       updatedAt: typeof parsed.updatedAt === "string" ? parsed.updatedAt : "",
     };
   }
@@ -275,6 +296,7 @@ export async function getActiveRecipient(): Promise<ActiveRecipientConfig> {
   return {
     name: env.PARTNER_NAME,
     email: env.PARTNER_EMAIL,
+    channel: "email",
     updatedAt: "",
   };
 }
@@ -282,19 +304,27 @@ export async function getActiveRecipient(): Promise<ActiveRecipientConfig> {
 export async function setActiveRecipient(input: {
   name: string;
   email: string;
+  whatsapp?: string;
+  channel?: NotificationChannel;
 }): Promise<ActiveRecipientConfig> {
+  const whatsapp = normalizeStoredWhatsApp(input.whatsapp);
+  const channel = normalizeStoredChannel(input.channel);
   const config: ActiveRecipientConfig = {
     name: input.name.trim(),
     email: input.email.trim().toLowerCase(),
+    ...(whatsapp ? { whatsapp } : {}),
+    channel,
     updatedAt: getNowWibIso(),
   };
 
   const redis = getRedis();
   await redis.set(REDIS_KEYS.botRecipient, JSON.stringify(config));
 
+  const channelLabel =
+    channel === "both" ? "Email + WhatsApp" : channel === "whatsapp" ? "WhatsApp" : "Email";
   await appendActivityLog({
     type: "recipient_updated",
-    summary: `Penerima aktif diperbarui ke ${config.name} (${config.email}).`,
+    summary: `Penerima aktif diperbarui ke ${config.name} (${config.email}${whatsapp ? `, WA: ${whatsapp}` : ""}, kanal: ${channelLabel}).`,
     result: "success",
   });
 
@@ -1066,6 +1096,7 @@ export async function getFriendContactById(id: string): Promise<FriendContact | 
 export async function createFriendContact(input: {
   name: string;
   email: string;
+  whatsapp?: string;
   group: string;
 }): Promise<FriendContact> {
   const normalizedEmail = input.email.trim().toLowerCase();
@@ -1074,10 +1105,12 @@ export async function createFriendContact(input: {
     throw new Error("DUPLICATE_CONTACT_EMAIL");
   }
 
+  const whatsapp = normalizeStoredWhatsApp(input.whatsapp);
   const contact: FriendContact = {
     id: crypto.randomUUID(),
     name: input.name.trim(),
     email: normalizedEmail,
+    ...(whatsapp ? { whatsapp } : {}),
     group: input.group.trim() || "Umum",
     createdAt: getNowWibIso(),
   };
@@ -1092,7 +1125,7 @@ export async function createFriendContact(input: {
 
 export async function updateFriendContact(
   id: string,
-  input: { name?: string; email?: string; group?: string },
+  input: { name?: string; email?: string; whatsapp?: string; group?: string },
 ): Promise<FriendContact | null> {
   const current = await getFriendContactById(id);
   if (!current) {
@@ -1107,12 +1140,21 @@ export async function updateFriendContact(
     }
   }
 
+  const nextWhatsapp =
+    input.whatsapp !== undefined
+      ? normalizeStoredWhatsApp(input.whatsapp)
+      : normalizeStoredWhatsApp(current.whatsapp);
+
   const updated: FriendContact = {
     ...current,
     name: input.name !== undefined ? input.name.trim() : current.name,
     email: nextEmail,
+    ...(nextWhatsapp ? { whatsapp: nextWhatsapp } : {}),
     group: input.group !== undefined ? input.group.trim() || "Umum" : current.group,
   };
+  if (!nextWhatsapp) {
+    delete updated.whatsapp;
+  }
 
   const redis = getRedis();
   await redis.hset(REDIS_KEYS.friendContacts, {

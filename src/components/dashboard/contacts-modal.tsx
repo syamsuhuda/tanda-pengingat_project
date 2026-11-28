@@ -22,6 +22,7 @@ export function ContactsModal({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [whatsapp, setWhatsapp] = useState("");
   const [group, setGroup] = useState("Umum");
   const [searchQuery, setSearchQuery] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -72,6 +73,7 @@ export function ContactsModal({
     setEditingId(null);
     setName("");
     setEmail("");
+    setWhatsapp("");
     setGroup("Umum");
   }
 
@@ -79,6 +81,7 @@ export function ContactsModal({
     setEditingId(contact.id);
     setName(contact.name);
     setEmail(contact.email);
+    setWhatsapp(contact.whatsapp ?? "");
     setGroup(contact.group);
     setFeedback(null);
     nameInputRef.current?.focus();
@@ -99,6 +102,7 @@ export function ContactsModal({
         body: JSON.stringify({
           name: name.trim(),
           email: email.trim(),
+          whatsapp: whatsapp.trim(),
           group: group.trim() || "Umum",
         }),
       });
@@ -225,7 +229,7 @@ export function ContactsModal({
               ) : null}
             </div>
 
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label
                   htmlFor="contact-name"
@@ -261,6 +265,25 @@ export function ContactsModal({
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder="nama@email.com"
+                  className="mt-1 min-h-[44px] w-full rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-3 text-base text-[var(--ink)] placeholder:text-[var(--ink-muted)] sm:text-sm"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="contact-whatsapp"
+                  className="block text-xs font-semibold text-[var(--ink)]"
+                >
+                  WhatsApp <span className="font-normal text-[var(--ink-muted)]">(Opsional)</span>
+                </label>
+                <input
+                  id="contact-whatsapp"
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={30}
+                  value={whatsapp}
+                  onChange={(event) => setWhatsapp(event.target.value)}
+                  placeholder="08xxxxxxxxxx"
                   className="mt-1 min-h-[44px] w-full rounded-lg border border-[var(--border-control)] bg-[var(--surface)] px-3 text-base text-[var(--ink)] placeholder:text-[var(--ink-muted)] sm:text-sm"
                 />
               </div>

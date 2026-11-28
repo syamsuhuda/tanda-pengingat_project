@@ -3,6 +3,8 @@ import { handleRouteError, jsonError, jsonOk, withNoStore } from "@/lib/api-help
 import { getAppBaseUrl } from "@/lib/env";
 import { sendAttendanceReminder, sendUrgentWithEscalation } from "@/lib/mailer";
 import { createAttendanceToken } from "@/lib/security";
+import { sendWhatsAppMessage } from "@/lib/whatsapp";
+import { buildAttendanceReminderWhatsApp } from "@/lib/whatsapp-templates";
 import {
   acquireStageProcessingLock,
   appendActivityLog,
@@ -211,163 +213,310 @@ export async function executeCronAttendance(params: {
       );
     }
 
+    const activeChannel = recipient.channel ?? "email";
+    const hasWaNumber = Boolean(recipient.whatsapp);
+    const shouldSendWa = (activeChannel === "whatsapp" || activeChannel === "both") && hasWaNumber;
+    const shouldSendEmail = activeChannel === "email" || activeChannel === "both" || !shouldSendWa;
+
     try {
       if (targetStage === "urgent") {
-        const dispatch = await sendUrgentWithEscalation({
-          dateWib: todayWib,
-          recipient,
-          senderName,
-          confirmUrl,
-          dashboardUrl: baseUrl,
-          includeIcs: icsConfig.enabledStages.urgent,
-          icsConfig,
-          customMessage: customMessageText,
-          scheduledTimeWib,
-        });
+        const waPromise = shouldSendWa && recipient.whatsapp
+          ? sendWhatsAppMessage(
+              recipient.whatsapp,
+              buildAttendanceReminderWhatsApp({
+                stage: "urgent",
+                dateWib: todayWib,
+                recipientName: recipient.name,
+                senderName,
+                confirmUrl,
+                customMessage: customMessageText,
+                scheduledTimeWib,
+              }),
+            )
+          : Promise.resolve(null);
 
-        if (!dispatch.partner.ok && !dispatch.escalation.ok) {
+        const emailPromise = shouldSendEmail
+          ? sendUrgentWithEscalation({
+              dateWib: todayWib,
+              recipient,
+              senderName,
+              confirmUrl,
+              dashboardUrl: baseUrl,
+              includeIcs: icsConfig.enabledStages.urgent,
+              icsConfig,
+              customMessage: customMessageText,
+              scheduledTimeWib,
+            })
+          : Promise.resolve(null);
+
+        const [emailSettled, waSettled] = await Promise.allSettled([emailPromise, waPromise]);
+
+        const dispatch =
+          emailSettled.status === "fulfilled" && emailSettled.value
+            ? emailSettled.value
+            : {
+                partner: { ok: false, error: emailSettled.status === "rejected" ? String(emailSettled.reason) : "Kanal email dinonaktifkan" },
+                escalation: { ok: false, error: emailSettled.status === "rejected" ? String(emailSettled.reason) : "Kanal email dinonaktifkan" },
+              };
+
+        const waResult =
+          waSettled.status === "fulfilled"
+            ? waSettled.value
+            : { ok: false, to: recipient.whatsapp ?? "", error: "Gagal mengirim WhatsApp." };
+
+        if (shouldSendEmail) {
+          console.info(
+            `[Email] urgent partner=${dispatch.partner.ok ? "ok" : "error"} escalation=${dispatch.escalation.ok ? "ok" : "error"}`,
+          );
+        }
+        if (shouldSendWa) {
+          console.info(`[WhatsApp] urgent ok=${waResult?.ok ? "true" : "false"}`);
+        }
+
+        const emailPartnerOk = shouldSendEmail && dispatch.partner.ok;
+        const emailEscalationOk = shouldSendEmail && dispatch.escalation.ok;
+        const waOk = shouldSendWa && Boolean(waResult?.ok);
+        const anyPartnerOk = emailPartnerOk || waOk;
+        const anyDelivered = anyPartnerOk || emailEscalationOk;
+
+        if (!anyDelivered) {
           await releaseStageProcessingLock(todayWib, "urgent");
           await Promise.all([
-            recordBotHealthError({
-              type: "smtp",
-              stage: "urgent",
-              message: dispatch.partner.error ?? "Gagal mengirim email urgent dan eskalasi.",
-            }),
+            shouldSendEmail
+              ? recordBotHealthError({
+                  type: "smtp",
+                  stage: "urgent",
+                  message: dispatch.partner.error ?? "Gagal mengirim email urgent dan eskalasi.",
+                })
+              : Promise.resolve(),
             appendActivityLog({
               type: "cron_urgent",
-              summary: `Gagal mengirim peringatan urgent (${scheduledTimeWib}) ke ${recipient.name} dan eskalasi (${todayWib}).`,
+              summary: `Gagal mengirim peringatan urgent (${scheduledTimeWib}) ke ${recipient.name} (${todayWib}).`,
               result: "error",
             }),
-            pingSafe("smtp_error", "urgent"),
+            pingSafe("delivery_error", "urgent"),
           ]);
           return withNoStore(
             jsonError(
-              "Gagal mengirim email urgent dan email eskalasi.",
-              "SMTP_SEND_FAILED",
+              "Gagal mengirim peringatan urgent melalui seluruh kanal aktif.",
+              "DELIVERY_FAILED",
               500,
-              dispatch,
+              { dispatch, whatsapp: waResult },
             ),
           );
         }
 
-        if (dispatch.partner.ok) {
-          await Promise.all([
-            setStageSentLock(todayWib, "urgent"),
-            clearBotHealthError("smtp"),
-          ]);
-        } else {
-          await recordBotHealthError({
-            type: "smtp",
-            stage: "urgent",
-            message: dispatch.partner.error ?? "Gagal mengirim email urgent ke penerima utama.",
-          });
+        if (anyPartnerOk) {
+          await setStageSentLock(todayWib, "urgent");
+        }
+        if (shouldSendEmail) {
+          if (dispatch.partner.ok) {
+            await clearBotHealthError("smtp");
+          } else {
+            await recordBotHealthError({
+              type: "smtp",
+              stage: "urgent",
+              message: dispatch.partner.error ?? "Gagal mengirim email urgent ke penerima utama.",
+            });
+          }
         }
         await releaseStageProcessingLock(todayWib, "urgent");
 
-        const bothOk = dispatch.partner.ok && dispatch.escalation.ok;
+        const allActiveOk =
+          (!shouldSendEmail || (dispatch.partner.ok && dispatch.escalation.ok)) &&
+          (!shouldSendWa || waOk);
+
+        const channelParts: string[] = [];
+        if (shouldSendEmail) {
+          channelParts.push(`Email: ${dispatch.partner.ok ? "ok" : "gagal"}`);
+        }
+        if (shouldSendWa) {
+          channelParts.push(`WA: ${waOk ? "ok" : "gagal"}`);
+        }
+
         await Promise.all([
           appendActivityLog({
             type: "cron_urgent",
-            summary: bothOk
-              ? `Peringatan urgent (${scheduledTimeWib})${icsConfig.enabledStages.urgent ? " + .ics" : ""} ke ${recipient.name} dan email eskalasi terkirim (${todayWib}).`
-              : `Pengiriman urgent (${scheduledTimeWib}, ${todayWib}) berhasil sebagian (partner: ${dispatch.partner.ok ? "ok" : "gagal"}, eskalasi: ${dispatch.escalation.ok ? "ok" : "gagal"}).`,
-            result: bothOk ? "success" : "partial",
+            summary: allActiveOk
+              ? `Peringatan urgent (${scheduledTimeWib})${shouldSendEmail && icsConfig.enabledStages.urgent ? " + .ics" : ""} ke ${recipient.name} terkirim (${channelParts.join(", ")}, ${todayWib}).`
+              : `Pengiriman urgent (${scheduledTimeWib}, ${todayWib}) selesai sebagian (${channelParts.join(", ")}).`,
+            result: allActiveOk ? "success" : "partial",
           }),
           touchDashboardVersion(),
-          pingSafe(bothOk ? "sent" : "partial", "urgent"),
+          pingSafe(allActiveOk ? "sent" : "partial", "urgent"),
         ]);
 
         return withNoStore(
           jsonOk(
-            bothOk
-              ? "Peringatan urgent dan email eskalasi berhasil dikirim."
+            allActiveOk
+              ? "Peringatan urgent berhasil dikirim."
               : "Pengiriman urgent selesai sebagian; cek detail hasil dan log aktivitas.",
             {
-              status: bothOk ? "sent" : "partial",
+              status: allActiveOk ? "sent" : "partial",
               skipped: false,
               dateWib: todayWib,
               stage: targetStage,
               requestedStage,
               scheduledTimeWib,
               dispatch,
+              channels: {
+                email: shouldSendEmail ? dispatch : { skipped: true },
+                whatsapp: shouldSendWa ? waResult : { skipped: true },
+              },
             },
-            bothOk ? 200 : 207,
+            allActiveOk ? 200 : 207,
           ),
         );
       }
 
       const includeIcs = icsConfig.enabledStages[targetStage];
-      let sent: { messageId: string };
-      try {
-        sent = await sendAttendanceReminder({
-          stage: targetStage,
-          dateWib: todayWib,
-          recipient,
-          senderName,
-          confirmUrl,
-          includeIcs,
-          icsConfig,
-          customMessage: customMessageText,
-          scheduledTimeWib,
-        });
-      } catch (smtpError) {
+      const [emailSettled, waSettled] = await Promise.allSettled([
+        shouldSendEmail
+          ? sendAttendanceReminder({
+              stage: targetStage,
+              dateWib: todayWib,
+              recipient,
+              senderName,
+              confirmUrl,
+              includeIcs,
+              icsConfig,
+              customMessage: customMessageText,
+              scheduledTimeWib,
+            })
+          : Promise.resolve(null),
+        shouldSendWa && recipient.whatsapp
+          ? sendWhatsAppMessage(
+              recipient.whatsapp,
+              buildAttendanceReminderWhatsApp({
+                stage: targetStage,
+                dateWib: todayWib,
+                recipientName: recipient.name,
+                senderName,
+                confirmUrl,
+                customMessage: customMessageText,
+                scheduledTimeWib,
+              }),
+            )
+          : Promise.resolve(null),
+      ]);
+
+      const emailOk = shouldSendEmail && emailSettled.status === "fulfilled" && Boolean(emailSettled.value);
+      const emailMessageId =
+        emailSettled.status === "fulfilled" && emailSettled.value ? emailSettled.value.messageId : undefined;
+      const emailError =
+        emailSettled.status === "rejected"
+          ? emailSettled.reason instanceof Error
+            ? emailSettled.reason.message
+            : "Gagal mengirim email melalui SMTP."
+          : undefined;
+
+      const waResult =
+        waSettled.status === "fulfilled"
+          ? waSettled.value
+          : { ok: false, to: recipient.whatsapp ?? "", error: "Gagal mengirim WhatsApp." };
+      const waOk = shouldSendWa && Boolean(waResult?.ok);
+
+      if (shouldSendEmail) {
+        console.info(`[Email] ${targetStage} ok=${emailOk}${emailError ? ` err=${emailError}` : ""}`);
+      }
+      if (shouldSendWa) {
+        console.info(
+          `[WhatsApp] ${targetStage} ok=${waOk}${waResult && !waResult.ok && waResult.error ? ` err=${waResult.error}` : ""}`,
+        );
+      }
+
+      if (!emailOk && !waOk) {
         // Lepaskan lock dan jangan pasang sentLock agar tick berikutnya dapat mencoba ulang.
         await releaseStageProcessingLock(todayWib, targetStage);
         await Promise.all([
-          recordBotHealthError({
-            type: "smtp",
-            stage: targetStage,
-            message: smtpError,
-          }),
+          shouldSendEmail
+            ? recordBotHealthError({
+                type: "smtp",
+                stage: targetStage,
+                message: emailError ?? "Gagal mengirim email melalui SMTP.",
+              })
+            : Promise.resolve(),
           appendActivityLog({
             type: targetStage === "morning" ? "cron_morning" : "cron_afternoon",
-            summary: `Gagal mengirim pengingat ${STAGE_NAME[targetStage].toLowerCase()} (${scheduledTimeWib}) ke ${recipient.name} via SMTP (${todayWib}).`,
+            summary: `Gagal mengirim pengingat ${STAGE_NAME[targetStage].toLowerCase()} (${scheduledTimeWib}) ke ${recipient.name} (${todayWib}).`,
             result: "error",
           }),
-          pingSafe("smtp_error", targetStage),
+          pingSafe("delivery_error", targetStage),
         ]);
         return withNoStore(
           jsonError(
-            `Gagal mengirim email pengingat ${STAGE_NAME[targetStage].toLowerCase()} melalui SMTP.`,
-            "SMTP_SEND_FAILED",
+            `Gagal mengirim pengingat ${STAGE_NAME[targetStage].toLowerCase()} melalui seluruh kanal aktif.`,
+            shouldSendEmail && !shouldSendWa ? "SMTP_SEND_FAILED" : "DELIVERY_FAILED",
             500,
+            {
+              channels: {
+                email: shouldSendEmail ? { ok: false, error: emailError } : { skipped: true },
+                whatsapp: shouldSendWa ? waResult : { skipped: true },
+              },
+            },
           ),
         );
       }
 
       const [lockTimestamp] = await Promise.all([
         setStageSentLock(todayWib, targetStage),
-        clearBotHealthError("smtp"),
+        shouldSendEmail
+          ? emailOk
+            ? clearBotHealthError("smtp")
+            : recordBotHealthError({
+                type: "smtp",
+                stage: targetStage,
+                message: emailError ?? "Gagal mengirim email melalui SMTP.",
+              })
+          : Promise.resolve(),
       ]);
       await releaseStageProcessingLock(todayWib, targetStage);
+
+      const allActiveOk = (!shouldSendEmail || emailOk) && (!shouldSendWa || waOk);
+      const channelSummaryParts: string[] = [];
+      if (shouldSendEmail) {
+        channelSummaryParts.push(`Email: ${emailOk ? "ok" : "gagal"}`);
+      }
+      if (shouldSendWa) {
+        channelSummaryParts.push(`WA: ${waOk ? "ok" : "gagal"}`);
+      }
 
       await Promise.all([
         appendActivityLog({
           type: targetStage === "morning" ? "cron_morning" : "cron_afternoon",
           summary:
             targetStage === "morning"
-              ? `Pengingat pagi (${scheduledTimeWib})${includeIcs ? " + .ics" : ""} terkirim ke ${recipient.name} (${todayWib}).`
-              : `Pengecekan siang/sore (${scheduledTimeWib})${includeIcs ? " + .ics" : ""} terkirim ke ${recipient.name} (${todayWib}).`,
-          result: "success",
+              ? `Pengingat pagi (${scheduledTimeWib})${shouldSendEmail && includeIcs ? " + .ics" : ""} ke ${recipient.name} (${channelSummaryParts.join(", ")}, ${todayWib}).`
+              : `Pengecekan siang/sore (${scheduledTimeWib})${shouldSendEmail && includeIcs ? " + .ics" : ""} ke ${recipient.name} (${channelSummaryParts.join(", ")}, ${todayWib}).`,
+          result: allActiveOk ? "success" : "partial",
         }),
         touchDashboardVersion(),
-        pingSafe("sent", targetStage),
+        pingSafe(allActiveOk ? "sent" : "partial", targetStage),
       ]);
 
       return withNoStore(
         jsonOk(
-          `Pengingat ${STAGE_NAME[targetStage]} (${scheduledTimeWib}) berhasil dikirim ke ${recipient.name}.`,
+          allActiveOk
+            ? `Pengingat ${STAGE_NAME[targetStage]} (${scheduledTimeWib}) berhasil dikirim ke ${recipient.name}.`
+            : `Pengingat ${STAGE_NAME[targetStage]} (${scheduledTimeWib}) terkirim sebagian (${channelSummaryParts.join(", ")}).`,
           {
-            status: "sent",
+            status: allActiveOk ? "sent" : "partial",
             skipped: false,
             dateWib: todayWib,
             stage: targetStage,
             requestedStage,
             scheduledTimeWib,
             sentAt: lockTimestamp,
-            messageId: sent.messageId,
+            ...(emailMessageId ? { messageId: emailMessageId } : {}),
             includeIcs,
+            channels: {
+              email: shouldSendEmail
+                ? { ok: emailOk, ...(emailMessageId ? { messageId: emailMessageId } : {}), ...(emailError ? { error: emailError } : {}) }
+                : { skipped: true },
+              whatsapp: shouldSendWa ? waResult : { skipped: true },
+            },
           },
+          allActiveOk ? 200 : 207,
         ),
       );
     } catch (innerError) {
